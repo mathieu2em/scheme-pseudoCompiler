@@ -52,9 +52,11 @@
            (let ((c (@ inp)))
              (cond ((chiffre? c)   (symbol-int inp cont))
                    ((lettre? c)    (symbol-id inp cont))
-                   ((char=? c #\() (cont ($ inp) 'LPAR))
-                   ((char=? c #\)) (cont ($ inp) 'RPAR))
-                   ((char=? c #\;) (cont ($ inp) 'SEMI))
+                   ((char=? c #\() (cont ($ inp) 'LPAR)) ;; (
+                   ((char=? c #\)) (cont ($ inp) 'RPAR)) ;; )
+                   ((char=? c #\;) (cont ($ inp) 'SEMI)) ;; ;
+                   ((char=? c #\=)  (cont ($ inp) 'EQ))  ;; =
+                   ((char=? c #\+)  (cont ($ inp) 'PLUS));; +
                    (else
                     (syntax-err))))))))
 
@@ -86,7 +88,7 @@
 
 (define blanc?
   (lambda (c)
-    (or (char=? c #\space) (char=? c #\newline) (char=? c #\tab))))
+    (or (char=? c #\space) (char=? c #\newline) (char=? c #\tab) (char=? c #\return))))
 
 ;; La fonction chiffre? teste si son unique parametre est un caractere
 ;; numerique.
@@ -211,7 +213,7 @@
                             (lambda (inp)
                               (cont inp
                                     (list 'PRINT expr))))))))
-
+;; "(" <expr> ")"
 (define <paren_expr>
   (lambda (inp cont)
     (expect 'LPAR ;; doit debuter par "("
@@ -235,6 +237,7 @@
                         (cont inp
                               (list 'EXPR expr))))))))
 
+;;<test> | <id> "=" <expr>
 (define <expr>
   (lambda (inp cont)
     (next-sym inp ;; verifier 1e symbole du <expr>
@@ -251,18 +254,36 @@
                                                       expr))))
                                 (<test> inp cont))))))))
 
+;;<sum> | <sum> "<" <sum> | <sum> "<=" <sum> | <sum> "<=" <sum> | <sum> "<=" <sum>
+;;| <sum> ">" <sum> | <sum> ">=" <sum> | <sum> "==" <sum> | <sum> "!=" <sum>
 (define <test>
   (lambda (inp cont)
     (<sum> inp cont)))
 
+;;<mult> | <sum> "+" <mult> | <sum> "-" <mult>
 (define <sum>
   (lambda (inp cont)
-    (<mult> inp cont)))
+    (display "inp sum: ")(display inp)(newline)
+    (next-sym inp ;; verifier 1e symbole du <expr>
+              (lambda (inp2 sym1)
+                (next-sym inp2 ;; verifier 2e symbole du <expr>
+                          (lambda (inp3 sym2)
+                            (if (and (integer? sym1) ;; combinaison "<Int> =" ? ;;TODO doit prevoir "<id> ="
+                                     (equal? sym2 'PLUS))
+                                (<sum> inp3
+                                       (lambda (inp4 expr)
+                                          (cont inp4
+                                                (list 'ADD
+                                                      '(INT 2);; TODO doit analyser premier int du inp
+                                                      expr))))
+                                (<mult> inp cont))))))))
 
+;;<term> | <mult> "*" <term> | <mult> "/" <term> | <mult> "%" <term>
 (define <mult>
   (lambda (inp cont)
     (<term> inp cont)))
 
+;;<id> | <int>| <parent_expr>
 (define <term>
   (lambda (inp cont)
     (next-sym inp ;; verifier le premier symbole du <term>
@@ -302,6 +323,10 @@
     (case (car ast)
 
       ((PRINT)
+       (display "envS: ")(display env) (newline)
+       (display "output: ")(display output) (newline)
+       (display "ast: ")(display  ast)(newline)
+       (display "cont: ")(display cont)(newline)
        (exec-expr env ;; evaluer l'expression du print
                   output
                   (cadr ast)
@@ -317,6 +342,8 @@
                   (cadr ast)
                   (lambda (env output val)
                     (cont env output)))) ;; continuer en ignorant le resultat
+
+      ;;((ASSIGN))
 
       (else
        "internal error (unknown statement AST)\n"))))
@@ -340,6 +367,17 @@
              output
              (cadr ast))) ;; retourner la valeur de la constante
 
+      ((ADD)
+       (display "envE: ")(display env) (newline)
+       (display "output: ")(display output) (newline)
+       (display "ast: ")(display  ast)(newline)
+       (display "cont: ")(display cont)(newline)
+       (display (cdr ast))(newline)
+       (cont env
+             output
+             (let ((num1 (cadr(cadr ast))) (num2 (cadr(cadr(cdr ast)))))
+             (+ num1 num2))))
+      
       (else
        "internal error (unknown expression AST)\n"))))
 
