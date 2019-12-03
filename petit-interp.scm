@@ -264,18 +264,19 @@
 (define <sum>
   (lambda (inp cont)
     (display "inp sum: ")(display inp)(newline)
-    (next-sym inp ;; verifier 1e symbole du <expr>
+    (display "cont: ")(display cont)(newline)
+    (next-sym inp ;; verifier 1e symbole du <sum>)
               (lambda (inp2 sym1)
-                (next-sym inp2 ;; verifier 2e symbole du <expr>
+                (next-sym inp2 ;; verifier 2e symbole du <sum>
                           (lambda (inp3 sym2)
-                            (if (and (integer? sym1) ;; combinaison "<Int> =" ? ;;TODO doit prevoir "<id> ="
+                            (if (and (integer? sym1) ;; combinaison "<Int> +" ? ;;TODO doit prevoir "<id> +"
                                      (equal? sym2 'PLUS))
                                 (<sum> inp3
                                        (lambda (inp4 expr)
-                                          (cont inp4
-                                                (list 'ADD
-                                                      '(INT 2);; TODO doit analyser premier int du inp
-                                                      expr))))
+                                         (cont inp4
+                                               (list 'ADD
+                                                     (list 'INT sym1)
+                                                     expr))))
                                 (<mult> inp cont))))))))
 
 ;;<term> | <mult> "*" <term> | <mult> "/" <term> | <mult> "%" <term>
@@ -320,6 +321,7 @@
 
 (define exec-stat
   (lambda (env output ast cont)
+    (display "current exec-stat: ")(display (car ast))(newline)
     (case (car ast)
 
       ((PRINT)
@@ -344,7 +346,6 @@
                     (cont env output)))) ;; continuer en ignorant le resultat
 
       ;;((ASSIGN))
-
       (else
        "internal error (unknown statement AST)\n"))))
 
@@ -373,11 +374,22 @@
        (display "ast: ")(display  ast)(newline)
        (display "cont: ")(display cont)(newline)
        (display (cdr ast))(newline)
+       (display (car (cdr ast)))(newline)
+       (display (car (cdr(cdr ast))))(newline)
+       (let((num1 (exec-expr env
+                                  output
+                                  (car (cdr ast))
+                                  (lambda(env output val)
+                                    val)))
+               (num2 (exec-expr env
+                                output
+                                (car(cdr(cdr ast)))
+                                (lambda(env output val)
+                                  val))))
        (cont env
              output
-             (let ((num1 (cadr(cadr ast))) (num2 (cadr(cadr(cdr ast)))))
              (+ num1 num2))))
-      
+
       (else
        "internal error (unknown expression AST)\n"))))
 
