@@ -57,6 +57,10 @@
                    ((char=? c #\;) (cont ($ inp) 'SEMI)) ;; ;
                    ((char=? c #\=)  (cont ($ inp) 'EQ))  ;; =
                    ((char=? c #\+)  (cont ($ inp) 'PLUS));; +
+                   ((char=? c #\-)  (cont ($ inp) 'MINUS));; -
+                   ((char=? c #\*)  (cont ($ inp) 'AST));; * AST pour Asterix
+                   ((char=? c #\/)  (cont ($ inp) 'FS));; / FS  pour Foward Slash
+                   ((char=? c #\%)  (cont ($ inp) 'PRCT));; / PRCT  pour Percent
                    (else
                     (syntax-err))))))))
 
@@ -269,20 +273,60 @@
               (lambda (inp2 sym1)
                 (next-sym inp2 ;; verifier 2e symbole du <sum>
                           (lambda (inp3 sym2)
-                            (if (and (integer? sym1) ;; combinaison "<Int> +" ? ;;TODO doit prevoir "<id> +"
+                            (cond
+                             ((and (integer? sym1) ;; combinaison "<Int> +" ? ;;TODO doit prevoir "<id> +"
                                      (equal? sym2 'PLUS))
-                                (<sum> inp3
-                                       (lambda (inp4 expr)
-                                         (cont inp4
-                                               (list 'ADD
-                                                     (list 'INT sym1)
-                                                     expr))))
-                                (<mult> inp cont))))))))
+                              (<sum> inp3
+                                     (lambda (inp4 expr)
+                                       (cont inp4
+                                             (list 'ADD
+                                                   (list 'INT sym1)
+                                                   expr)))))
+                             ((and (integer? sym1) ;; combinaison "<Int> -" ? ;;TODO doit prevoir "<id> -"
+                                   (equal? sym2 'MINUS))
+                              (<sum> inp3
+                                     (lambda (inp4 expr)
+                                       (cont inp4
+                                             (list 'SUB
+                                                   (list 'INT sym1)
+                                                   expr)))))
+                             (else (<mult> inp cont)))))))))
 
 ;;<term> | <mult> "*" <term> | <mult> "/" <term> | <mult> "%" <term>
 (define <mult>
   (lambda (inp cont)
-    (<term> inp cont)))
+    (display "inp sum: ")(display inp)(newline)
+    (display "cont: ")(display cont)(newline)
+    (next-sym inp ;; verifier 1e symbole du <sum>)
+              (lambda (inp2 sym1)
+                (next-sym inp2 ;; verifier 2e symbole du <sum>
+                          (lambda (inp3 sym2)
+                            (cond
+                             ((and (integer? sym1) ;; combinaison "<Int> +" ? ;;TODO doit prevoir "<id> +"
+                                     (equal? sym2 'AST))
+                              (<sum> inp3
+                                     (lambda (inp4 expr)
+                                       (cont inp4
+                                             (list 'MULT
+                                                   (list 'INT sym1)
+                                                   expr)))))
+                             ((and (integer? sym1) ;; combinaison "<Int> /" ? ;;TODO doit prevoir "<id> /"
+                                   (equal? sym2 'FS))
+                              (<sum> inp3
+                                     (lambda (inp4 expr)
+                                       (cont inp4
+                                             (list 'DIV
+                                                   (list 'INT sym1)
+                                                   expr)))))
+                              ((and (integer? sym1) ;; combinaison "<Int> /" ? ;;TODO doit prevoir "<id> /"
+                                   (equal? sym2 'PRCT))
+                              (<sum> inp3
+                                     (lambda (inp4 expr)
+                                       (cont inp4
+                                             (list 'MOD
+                                                   (list 'INT sym1)
+                                                   expr)))))
+                             (else (<term> inp cont)))))))))
 
 ;;<id> | <int>| <parent_expr>
 (define <term>
@@ -377,18 +421,78 @@
        (display (car (cdr ast)))(newline)
        (display (car (cdr(cdr ast))))(newline)
        (let((num1 (exec-expr env
-                                  output
-                                  (car (cdr ast))
-                                  (lambda(env output val)
-                                    val)))
-               (num2 (exec-expr env
-                                output
-                                (car(cdr(cdr ast)))
-                                (lambda(env output val)
-                                  val))))
-       (cont env
-             output
-             (+ num1 num2))))
+                             output
+                             (car (cdr ast))
+                             (lambda(env output val)
+                               val)))
+            (num2 (exec-expr env
+                             output
+                             (car(cdr(cdr ast)))
+                             (lambda(env output val)
+                               val))))
+         (cont env
+               output
+               (+ num1 num2))))
+      
+      ((SUB)
+       (let((num1 (exec-expr env
+                             output
+                             (car (cdr ast))
+                             (lambda(env output val)
+                               val)))
+            (num2 (exec-expr env
+                             output
+                             (car(cdr(cdr ast)))
+                             (lambda(env output val)
+                               val))))
+         (cont env
+               output
+               (- num1 num2))))
+
+      ((MULT)
+       (let((num1 (exec-expr env
+                             output
+                             (car (cdr ast))
+                             (lambda(env output val)
+                               val)))
+            (num2 (exec-expr env
+                             output
+                             (car(cdr(cdr ast)))
+                             (lambda(env output val)
+                               val))))
+         (cont env
+               output
+               (* num1 num2))))
+
+       ((DIV)
+       (let((num1 (exec-expr env
+                             output
+                             (car (cdr ast))
+                             (lambda(env output val)
+                               val)))
+            (num2 (exec-expr env
+                             output
+                             (car(cdr(cdr ast)))
+                             (lambda(env output val)
+                               val))))
+         (cont env
+               output
+               (/ num1 num2))))
+
+       ((MOD)
+       (let((num1 (exec-expr env
+                             output
+                             (car (cdr ast))
+                             (lambda(env output val)
+                               val)))
+            (num2 (exec-expr env
+                             output
+                             (car(cdr(cdr ast)))
+                             (lambda(env output val)
+                               val))))
+         (cont env
+               output
+               (modulo num1 num2))))
 
       (else
        "internal error (unknown expression AST)\n"))))
