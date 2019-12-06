@@ -245,6 +245,7 @@
 ;; "(" <expr> ")
 (define <paren_expr>
   (lambda (inp cont)
+    (display "ok")(newline)
     (expect 'LPAR ;; doit debuter par "("
             inp
             (lambda (inp)
