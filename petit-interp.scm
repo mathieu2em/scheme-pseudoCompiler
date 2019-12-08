@@ -208,7 +208,7 @@
                   ((PRINT-SYM)
                    (<print_stat> inp2 cont))
                   ((LBRK)
-                    (<bracket_stat> inp2 cont))
+                   (<bracket_stat> inp2 cont))
                   (else
                    (<expr_stat> inp cont)))))))
 (trace <stat>)
@@ -297,30 +297,25 @@
   (lambda (inp listeSum cont)
     (<mult> inp
             '()
-            (lambda (inp2 sym1)
+            (lambda (inp2 sym1) ;; gets next sym
               (next-sym inp2
-                        (lambda (inp3 sym2)
+                        (lambda (inp3 sym2) ;; gets next sym
                           (if (or (equal? sym2 'ADD)
                                   (equal? sym2 'SUB))
-                              (<sum> inp3
-                                     (cond ((null? listeSum)
-                                            (cons sym2 (list sym1)))
-                                           ((not (pair? (cdr listeSum)))
-                                            (cons sym2
-                                                  (cons (car listeSum)
-                                                        sym1)))
-                                           (else
-                                            (cons sym2
-                                                  (list (append listeSum
-                                                                (list sym1))))))
+                              (<sum> inp3 ;; calls sum on next sym
+                                     ;; the if will help format properly the operations
+                                     (if (null? listeSum) ;; premiere rec
+                                         (cons sym2 (list sym1))
+                                         (cons sym2
+                                               (list (append listeSum
+                                                             (list sym1)))))
                                      cont)
                               (cont inp2
-                                    (cond ((null? listeSum)
-                                           sym1)
-                                          ((not (pair? (cdr listeSum)))
-                                           (cons (car listeSum) sym1))
-                                          (else
-                                           (append listeSum (list sym1))))))))))))
+                                    ;; 3 major cases : term | (sym (term))
+                                    ;;                      | (sym (sym .... ))
+                                    (if (null? listeSum)
+                                        sym1
+                                        (append listeSum (list sym1)))))))))))
 
 ;;<term> | <mult> "*" <term> | <mult> "/" <term> | <mult> "%" <term>
 (define <mult>
@@ -333,26 +328,19 @@
                                   (equal? sym2 'MUL)
                                   (equal? sym2 'DIV))
                               (<mult> inp3
-                                      (cond ((null? listeMult)
-                                             (cons sym2 (list sym1)))
-                                            ((not (pair? (cdr listeMult)))
-                                             (cons (list sym2)
-                                                   (cons (car listeMult)
-                                                         (list sym1))))
-                                            (else
-                                             (cons sym2
-                                                   (list (append listeMult
-                                                                 (list sym1))))))
+                                      (if (null? listeMult)
+                                          (cons sym2 (list sym1))
+                                          (cons sym2
+                                                (list (append listeMult
+                                                              (list sym1)))))
                                       cont)
-                              (cont inp2 (cond ((null? listeMult)
-                                                sym1)
-                                               ((not (pair? (cdr listeMult)))
-                                                (cons (car listeMult)
-                                                        sym1))
-                                               (else
-                                                (append listeMult
-                                                        (list sym1))))))))))))
-
+                              (cont inp2
+                                    ;; 3 major cases : term | (sym (term))
+                                    ;;                      | (sym (sym .... ))
+                                    (if (null? listeMult)
+                                           sym1
+                                           (append listeMult
+                                                   (list sym1)))))))))))
 (trace <mult>)
 
 ;;<id> | <int>| <parent_expr>
@@ -492,7 +480,7 @@
                output
                (* num1 num2))))
 
-       ((DIV)
+      ((DIV)
        (let((num1 (exec-expr env
                              output
                              (car (cdr ast))
@@ -507,7 +495,7 @@
                output
                (/ num1 num2))))
 
-       ((MOD)
+      ((MOD)
        (let((num1 (exec-expr env
                              output
                              (car (cdr ast))
