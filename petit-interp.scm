@@ -311,8 +311,7 @@
                                                              (list sym1)))))
                                      cont)
                               (cont inp2
-                                    ;; 3 major cases : term | (sym (term))
-                                    ;;                      | (sym (sym .... ))
+                                    ;; term | (sym (term)) | (sym (sym .... ))
                                     (if (null? listeSum)
                                         sym1
                                         (append listeSum (list sym1)))))))))))
@@ -335,8 +334,7 @@
                                                               (list sym1)))))
                                       cont)
                               (cont inp2
-                                    ;; 3 major cases : term | (sym (term))
-                                    ;;                      | (sym (sym .... ))
+                                    ;; term | (sym (term))| (sym (sym .... ))
                                     (if (null? listeMult)
                                            sym1
                                            (append listeMult
