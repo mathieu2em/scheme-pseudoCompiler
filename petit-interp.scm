@@ -58,11 +58,11 @@
                    ((char=? c #\)) (cont ($ inp) 'RPAR)) ;; )
                    ((char=? c #\;) (cont ($ inp) 'SEMI)) ;; ;
                    ((char=? c #\=)  (cont ($ inp) 'EQ))  ;; =
-                   ((char=? c #\+)  (cont ($ inp) 'PLUS));; +
-                   ((char=? c #\-)  (cont ($ inp) 'MINUS));; -
-                   ((char=? c #\*)  (cont ($ inp) 'AST));; * AST pour Asterix
-                   ((char=? c #\/)  (cont ($ inp) 'FS));; / FS  pour Foward Slash
-                   ((char=? c #\%)  (cont ($ inp) 'PRCT));; / PRCT  pour Percent
+                   ((char=? c #\+)  (cont ($ inp) 'ADD));; +
+                   ((char=? c #\-)  (cont ($ inp) 'SUB));; -
+                   ((char=? c #\*)  (cont ($ inp) 'MUL));; * AST pour Asterix
+                   ((char=? c #\/)  (cont ($ inp) 'DIV));; / FS  pour Foward Slash
+                   ((char=? c #\%)  (cont ($ inp) 'MOD));; / PRCT  pour Percent
                    (else
                     (syntax-err))))))))
 
@@ -208,7 +208,7 @@
                   ((PRINT-SYM)
                    (<print_stat> inp2 cont))
                   ((LBRK)
-                    (<bracket_stat> inp2 cont))
+                   (<bracket_stat> inp2 cont))
                   (else
                    (<expr_stat> inp cont)))))))
 (trace <stat>)
@@ -290,67 +290,57 @@
 ;;| <sum> ">" <sum> | <sum> ">=" <sum> | <sum> "==" <sum> | <sum> "!=" <sum>
 (define <test>
   (lambda (inp cont)
-    (<sum> inp cont)))
+    (<sum> inp '() cont)))
 (trace <test>)
 ;;<mult> | <sum> "+" <mult> | <sum> "-" <mult>
 (define <sum>
-  (lambda (inp cont)
-    (next-sym inp ;; verifier 1e symbole du <sum>)
-              (lambda (inp2 sym1)
-                (next-sym inp2 ;; verifier 2e symbole du <sum>
-                          (lambda (inp3 sym2)
-                            (cond
-                             ((and (integer? sym1) ;; combinaison "<Int> +" ? ;;TODO doit prevoir "<id> +"
-                                     (equal? sym2 'PLUS))
-                              (<sum> inp3
-                                     (lambda (inp4 expr)
-                                       (cont inp4
-                                             (list 'ADD
-                                                   (list 'INT sym1)
-                                                   expr)))))
-                             ((and (integer? sym1) ;; combinaison "<Int> -" ? ;;TODO doit prevoir "<id> -"
-                                   (equal? sym2 'MINUS))
-                              (<sum> inp3
-                                     (lambda (inp4 expr)
-                                       (cont inp4
-                                             (list 'SUB
-                                                   (list 'INT sym1)
-                                                   expr)))))
-                             (else (<mult> inp cont)))))))))
-(trace <sum>)
+  (lambda (inp listeSum cont)
+    (<mult> inp
+            '()
+            (lambda (inp2 sym1) ;; gets next sym
+              (next-sym inp2
+                        (lambda (inp3 sym2) ;; gets next sym
+                          (if (or (equal? sym2 'ADD)
+                                  (equal? sym2 'SUB))
+                              (<sum> inp3 ;; calls sum on next sym
+                                     ;; the if will help format properly the operations
+                                     (if (null? listeSum) ;; premiere rec
+                                         (cons sym2 (list sym1))
+                                         (cons sym2
+                                               (list (append listeSum
+                                                             (list sym1)))))
+                                     cont)
+                              (cont inp2
+                                    ;; 3 major cases : term | (sym (term))
+                                    ;;                      | (sym (sym .... ))
+                                    (if (null? listeSum)
+                                        sym1
+                                        (append listeSum (list sym1)))))))))))
+
 ;;<term> | <mult> "*" <term> | <mult> "/" <term> | <mult> "%" <term>
 (define <mult>
-  (lambda (inp cont)
-    (next-sym inp ;; verifier 1e symbole du <sum>)
-              (lambda (inp2 sym1)
-                (next-sym inp2 ;; verifier 2e symbole du <sum>
-                          (lambda (inp3 sym2)
-                            (cond
-                             ((and (integer? sym1) ;; combinaison "<Int> +" ? ;;TODO doit prevoir "<id> +"
-                                     (equal? sym2 'AST))
-                              (<sum> inp3
-                                     (lambda (inp4 expr)
-                                       (cont inp4
-                                             (list 'MULT
-                                                   (list 'INT sym1)
-                                                   expr)))))
-                             ((and (integer? sym1) ;; combinaison "<Int> /" ? ;;TODO doit prevoir "<id> /"
-                                   (equal? sym2 'FS))
-                              (<sum> inp3
-                                     (lambda (inp4 expr)
-                                       (cont inp4
-                                             (list 'DIV
-                                                   (list 'INT sym1)
-                                                   expr)))))
-                              ((and (integer? sym1) ;; combinaison "<Int> /" ? ;;TODO doit prevoir "<id> /"
-                                   (equal? sym2 'PRCT))
-                              (<sum> inp3
-                                     (lambda (inp4 expr)
-                                       (cont inp4
-                                             (list 'MOD
-                                                   (list 'INT sym1)
-                                                   expr)))))
-                              (else (<term> inp cont)))))))))
+  (lambda (inp listeMult cont)
+    (<term> inp
+            (lambda (inp2 sym1)
+              (next-sym inp2
+                        (lambda (inp3 sym2)
+                          (if (or (equal? sym2 'MOD)
+                                  (equal? sym2 'MUL)
+                                  (equal? sym2 'DIV))
+                              (<mult> inp3
+                                      (if (null? listeMult)
+                                          (cons sym2 (list sym1))
+                                          (cons sym2
+                                                (list (append listeMult
+                                                              (list sym1)))))
+                                      cont)
+                              (cont inp2
+                                    ;; 3 major cases : term | (sym (term))
+                                    ;;                      | (sym (sym .... ))
+                                    (if (null? listeMult)
+                                           sym1
+                                           (append listeMult
+                                                   (list sym1)))))))))))
 (trace <mult>)
 
 ;;<id> | <int>| <parent_expr>
@@ -459,7 +449,7 @@
          (cont env
                output
                (+ num1 num2))))
-      
+
       ((SUB)
        (let((num1 (exec-expr env
                              output
@@ -475,7 +465,7 @@
                output
                (- num1 num2))))
 
-      ((MULT)
+      ((MUL)
        (let((num1 (exec-expr env
                              output
                              (car (cdr ast))
@@ -490,7 +480,7 @@
                output
                (* num1 num2))))
 
-       ((DIV)
+      ((DIV)
        (let((num1 (exec-expr env
                              output
                              (car (cdr ast))
@@ -505,7 +495,7 @@
                output
                (/ num1 num2))))
 
-       ((MOD)
+      ((MOD)
        (let((num1 (exec-expr env
                              output
                              (car (cdr ast))
