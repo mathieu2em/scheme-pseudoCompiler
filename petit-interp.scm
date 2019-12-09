@@ -60,9 +60,9 @@
                    ((char=? c #\=)  (cont ($ inp) 'EQ))  ;; =
                    ((char=? c #\+)  (cont ($ inp) 'ADD));; +
                    ((char=? c #\-)  (cont ($ inp) 'SUB));; -
-                   ((char=? c #\*)  (cont ($ inp) 'MUL));; * AST pour Asterix
-                   ((char=? c #\/)  (cont ($ inp) 'DIV));; / FS  pour Foward Slash
-                   ((char=? c #\%)  (cont ($ inp) 'MOD));; / PRCT  pour Percent
+                   ((char=? c #\*)  (cont ($ inp) 'MUL));; *
+                   ((char=? c #\/)  (cont ($ inp) 'DIV));; /
+                   ((char=? c #\%)  (cont ($ inp) 'MOD));; /
                    (else
                     (syntax-err))))))))
 
@@ -215,20 +215,21 @@
 
 (define <bracket_stat>
   (lambda (inp cont)
-    (<stat> inp cont)
-    (lambda (inp2 sym)
-      (next-sym inp2
-                (lambda(inp3 sym2)
-                  (cond(
-                        ((equals sym2 'EOI)
-                         (syntax-err))
-                        ((equals? sym2 'RBRK)
-                         (cont inp3 sym '()))
-                        (else
-                         (<bracket_stat>) inp2
-                         (lambda (inp4 stat2 stat_list)
-                           (cont inp4 (list stat2 stat_list)))))))))))
-
+    (<stat> inp ;;fait le statement a l'interieur
+            (lambda (inp2 sym);;regarde le symbole apres
+              (display "inp2: ")(display inp2)(newline)
+              (next-sym inp2
+                        (lambda(inp3 sym2)
+                          (cond
+                                ((equal? sym2 'EOI);;si on atteint la fin du document sans trouver un '}'
+                                 (syntax-err))
+                                ((equal? sym2 'RBRK);;si on trouve un '}'
+                                 (cont inp3 sym '()));; on ajoute un bloc statement ((<stat>)())
+                                (else
+                                 (<bracket_stat> inp2
+                                 (lambda (inp4 stat2 stat_list)
+                                   (cont inp4 (list stat2 stat_list))))))))))))
+  
 (trace <bracket_stat>)
 
 (define <print_stat>
@@ -349,7 +350,6 @@
                 (cond ((string? sym) ;; identificateur?
                        (cont inp2 (list 'VAR sym)))
                       ((number? sym) ;; entier?
-                       (display inp2)(newline)
                        (cont inp2 (list 'INT sym)))
                       (else
                        (<paren_expr> inp cont)))))))
@@ -379,14 +379,9 @@
 
 (define exec-stat
   (lambda (env output ast cont)
-    (display "current exec-stat: ")(display (car ast))(newline)
     (case (car ast)
 
       ((PRINT)
-       (display "envS: ")(display env) (newline)
-       (display "output: ")(display output) (newline)
-       (display "ast: ")(display  ast)(newline)
-       (display "cont: ")(display cont)(newline)
        (exec-expr env ;; evaluer l'expression du print
                   output
                   (cadr ast)
@@ -427,13 +422,6 @@
              (cadr ast))) ;; retourner la valeur de la constante
 
       ((ADD)
-       ;;(display "envE: ")(display env) (newline)
-       ;;(display "output: ")(display output) (newline)
-       ;;(display "ast: ")(display  ast)(newline)
-       ;;(display "cont: ")(display cont)(newline)
-       ;;(display (cdr ast))(newline)
-       ;;(display (car (cdr ast)))(newline)
-       ;;(display (car (cdr(cdr ast))))(newline)
        (let((num1 (exec-expr env
                              output
                              (car (cdr ast))
