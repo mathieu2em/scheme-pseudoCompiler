@@ -208,28 +208,27 @@
                   ((PRINT-SYM)
                    (<print_stat> inp2 cont))
                   ((LBRK)
-                   (<bracket_stat> inp2 cont))
+                   (<bracket_stat> inp2 '() cont))
                   (else
                    (<expr_stat> inp cont)))))))
 (trace <stat>)
 
 (define <bracket_stat>
-  (lambda (inp cont)
+  (lambda (inp listeStat cont)
     (<stat> inp ;;fait le statement a l'interieur
             (lambda (inp2 sym);;regarde le symbole apres
-              (display "inp2: ")(display inp2)(newline)
               (next-sym inp2
                         (lambda(inp3 sym2)
                           (cond
                                 ((equal? sym2 'EOI);;si on atteint la fin du document sans trouver un '}'
                                  (syntax-err))
                                 ((equal? sym2 'RBRK);;si on trouve un '}'
-                                 (cont inp3 sym '()));; on ajoute un bloc statement ((<stat>)())
+                                 (cont inp3(append listeStat (list sym '(ES)))));; on ajoute un bloc statement ((<stat>)())
                                 (else
                                  (<bracket_stat> inp2
-                                 (lambda (inp4 stat2 stat_list)
-                                   (cont inp4 (list stat2 stat_list))))))))))))
-  
+                                                 (append listeStat (list sym))
+                                                 cont)))))))))
+
 (trace <bracket_stat>)
 
 (define <print_stat>
@@ -379,25 +378,32 @@
 
 (define exec-stat
   (lambda (env output ast cont)
-    (case (car ast)
+    (display "ast courrant: ")(display ast)(newline)
+    (display "stat courrant: ")(display (car ast))(newline)
+    (case (car(car ast))
 
       ((PRINT)
        (exec-expr env ;; evaluer l'expression du print
                   output
-                  (cadr ast)
+                  (cadr(car ast))
                   (lambda (env output val)
-                    (cont env ;; ajouter le resultat a la sortie
-                          (string-append output
-                                         (number->string val)
-                                         "\n")))))
+                    (exec-stat env ;; ajouter le resultat a la sortie
+                                (string-append output
+                                               (number->string val)
+                                               "\n")
+                                (cdr ast)
+                                cont))))
 
       ((EXPR)
        (exec-expr env ;; evaluer l'expression
                   output
-                  (cadr ast)
+                  (cadr (car ast))
                   (lambda (env output val)
                     (cont env output)))) ;; continuer en ignorant le resultat
-
+      
+      ((ES);;END of Statement TODO peut probablement juste faire un () vide, mais faudra le traiter plus haut
+       (cont env output)
+       )
       ;;((ASSIGN))
       (else
        "internal error (unknown statement AST)\n"))))
