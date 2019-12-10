@@ -58,11 +58,14 @@
                    ((char=? c #\)) (cont ($ inp) 'RPAR)) ;; )
                    ((char=? c #\;) (cont ($ inp) 'SEMI)) ;; ;
                    ((char=? c #\=)  (cont ($ inp) 'EQ))  ;; =
-                   ((char=? c #\+)  (cont ($ inp) 'ADD));; +
-                   ((char=? c #\-)  (cont ($ inp) 'SUB));; -
-                   ((char=? c #\*)  (cont ($ inp) 'MUL));; * AST pour Asterix
-                   ((char=? c #\/)  (cont ($ inp) 'DIV));; / FS  pour Foward Slash
-                   ((char=? c #\%)  (cont ($ inp) 'MOD));; / PRCT  pour Percent
+                   ((char=? c #\+)  (cont ($ inp) 'ADD)) ;; +
+                   ((char=? c #\-)  (cont ($ inp) 'SUB)) ;; -
+                   ((char=? c #\*)  (cont ($ inp) 'MUL)) ;; *
+                   ((char=? c #\/)  (cont ($ inp) 'DIV)) ;; /
+                   ((char=? c #\%)  (cont ($ inp) 'MOD)) ;; %
+                   ((char=? c #\>)  (cont ($ inp) 'BT)) ;; >
+                   ((char=? c #\<)  (cont ($ inp) 'ST)) ;; <
+                   ((char=? c #\!)  (cont ($ inp) 'PM)) ;; !
                    (else
                     (syntax-err))))))))
 
@@ -208,26 +211,26 @@
                   ((PRINT-SYM)
                    (<print_stat> inp2 cont))
                   ((LBRK)
-                   (<bracket_stat> inp2 cont))
+                   (<bracket_stat> inp2 '() cont))
                   (else
                    (<expr_stat> inp cont)))))))
 (trace <stat>)
 
 (define <bracket_stat>
-  (lambda (inp cont)
-    (<stat> inp cont)
-    (lambda (inp2 sym)
-      (next-sym inp2
-                (lambda(inp3 sym2)
-                  (cond(
-                        ((equals sym2 'EOI)
-                         (syntax-err))
-                        ((equals? sym2 'RBRK)
-                         (cont inp3 sym '()))
-                        (else
-                         (<bracket_stat>) inp2
-                         (lambda (inp4 stat2 stat_list)
-                           (cont inp4 (list stat2 stat_list)))))))))))
+  (lambda (inp listeStat cont)
+    (<stat> inp ;;fait le statement a l'interieur
+            (lambda (inp2 sym);;regarde le symbole apres
+              (next-sym inp2
+                        (lambda(inp3 sym2)
+                          (cond
+                                ((equal? sym2 'EOI);;si on atteint la fin du document sans trouver un '}'
+                                 (syntax-err))
+                                ((equal? sym2 'RBRK);;si on trouve un '}'
+                                 (cont inp3(append listeStat (list sym '(ES)))));; on ajoute un bloc statement ((<stat>)())
+                                (else
+                                 (<bracket_stat> inp2
+                                                 (append listeStat (list sym))
+                                                 cont)))))))))
 
 (trace <bracket_stat>)
 
@@ -290,7 +293,26 @@
 ;;| <sum> ">" <sum> | <sum> ">=" <sum> | <sum> "==" <sum> | <sum> "!=" <sum>
 (define <test>
   (lambda (inp cont)
-    (<sum> inp '() cont)))
+    (<sum> inp
+           '()
+           (lambda (inp2 sym1) ;; gets next sym
+             (next-sym inp2
+                       (lambda (inp3 sym2) ;; gets next sym
+                         (if (or (equal? sym2 'ST);; <sum> "<" <sum>
+                                 (equal? sym2 'BT));; <sum> ">" <sum>
+                             (<sum> inp3 ;; calls sum on next sym
+                                    ;; the if will help format properly the operations
+                                    '()
+                                    (lambda (inp4 expr)
+                                      (display "sym1: ")(display sym1)(newline)
+                                      (display "sym2: ")(display sym2)(newline)
+                                      (display "expr: ")(display expr)(newline)
+                                      (display "inp3: ")(display inp3)(newline)
+                                      (cont inp4
+                                            (list sym2
+                                                  sym1
+                                                  expr))))
+                          (<sum> inp '() cont))))))))
 (trace <test>)
 ;;<mult> | <sum> "+" <mult> | <sum> "-" <mult>
 (define <sum>
@@ -349,7 +371,6 @@
                 (cond ((string? sym) ;; identificateur?
                        (cont inp2 (list 'VAR sym)))
                       ((number? sym) ;; entier?
-                       (display inp2)(newline)
                        (cont inp2 (list 'INT sym)))
                       (else
                        (<paren_expr> inp cont)))))))
@@ -379,30 +400,37 @@
 
 (define exec-stat
   (lambda (env output ast cont)
-    (display "current exec-stat: ")(display (car ast))(newline)
-    (case (car ast)
+    (display "ast courrant: ")(display ast)(newline)
+    (display "stat courrant: ")(display (car ast))(newline)
+    (case (car(car ast))
 
       ((PRINT)
-       (display "envS: ")(display env) (newline)
-       (display "output: ")(display output) (newline)
-       (display "ast: ")(display  ast)(newline)
-       (display "cont: ")(display cont)(newline)
        (exec-expr env ;; evaluer l'expression du print
                   output
-                  (cadr ast)
+                  (cadr(car ast))
                   (lambda (env output val)
-                    (cont env ;; ajouter le resultat a la sortie
-                          (string-append output
-                                         (number->string val)
-                                         "\n")))))
-
+                    (exec-stat env ;; ajouter le resultat a la sortie
+                               (cond ((number? val)
+                                      (string-append output
+                                                     (number->string val)
+                                                     "\n"))
+                                     (else
+                                      (string-append output
+                                                     val
+                                                     "\n")))
+                               (cdr ast)
+                               cont))))
+    
       ((EXPR)
        (exec-expr env ;; evaluer l'expression
                   output
-                  (cadr ast)
+                  (cadr (car ast))
                   (lambda (env output val)
                     (cont env output)))) ;; continuer en ignorant le resultat
-
+      
+      ((ES);;END of Statement TODO peut probablement juste faire un () vide, mais faudra le traiter plus haut
+       (cont env output)
+       )
       ;;((ASSIGN))
       (else
        "internal error (unknown statement AST)\n"))))
@@ -427,13 +455,6 @@
              (cadr ast))) ;; retourner la valeur de la constante
 
       ((ADD)
-       ;;(display "envE: ")(display env) (newline)
-       ;;(display "output: ")(display output) (newline)
-       ;;(display "ast: ")(display  ast)(newline)
-       ;;(display "cont: ")(display cont)(newline)
-       ;;(display (cdr ast))(newline)
-       ;;(display (car (cdr ast)))(newline)
-       ;;(display (car (cdr(cdr ast))))(newline)
        (let((num1 (exec-expr env
                              output
                              (car (cdr ast))
@@ -507,9 +528,38 @@
          (cont env
                output
                (modulo num1 num2))))
-
-      (else
-       "internal error (unknown expression AST)\n"))))
+      ((ST)
+       (let((num1 (exec-expr env
+                             output
+                             (car (cdr ast))
+                             (lambda(env output val)
+                               val)))
+            (num2 (exec-expr env
+                             output
+                             (car(cdr(cdr ast)))
+                             (lambda(env output val)
+                               val))))
+         (cont env
+               output
+               (if (< num1 num2) "true"
+                   "false"))))
+       ((BT)
+       (let((num1 (exec-expr env
+                             output
+                             (car (cdr ast))
+                             (lambda(env output val)
+                               val)))
+            (num2 (exec-expr env
+                             output
+                             (car(cdr(cdr ast)))
+                             (lambda(env output val)
+                               val))))
+         (cont env
+               output
+               (if (> num1 num2) "true"
+                   "false"))))
+    (else
+     "internal error (unknown expression AST)\n"))))
 
 ;; Il faut enlever la trace avant la remise...
 
