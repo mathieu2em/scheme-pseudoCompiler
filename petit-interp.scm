@@ -237,7 +237,7 @@
                   ((PRINT-SYM)
                    (<print_stat> inp2 cont))
                   ((LBRK)
-                   (<bracket_stat> inp2 '() cont))
+                   (<bracket_stat> inp2 '(SEQ) cont))
                   (else
                    (<expr_stat> inp cont)))))))
 (trace <stat>)
@@ -249,14 +249,16 @@
               (next-sym inp2
                         (lambda(inp3 sym2)
                           (cond
-                                ((equal? sym2 'EOI);;si on atteint la fin du document sans trouver un '}'
-                                 (syntax-err))
-                                ((equal? sym2 'RBRK);;si on trouve un '}'
-                                 (cont inp3(append listeStat (list sym '(ES)))));; on ajoute un bloc statement ((<stat>)())
-                                (else
-                                 (<bracket_stat> inp2
-                                                 (append listeStat (list sym))
-                                                 cont)))))))))
+                           ;;si on atteint la fin du document sans trouver un '}'
+                           ((equal? sym2 'EOI)
+                            (syntax-err))
+                           ((equal? sym2 'RBRK);;si on trouve un '}'
+                            ;; on ajoute un bloc statement ((<stat>)())
+                            (cont inp3 (append listeStat (list sym (list 'EMPTY)))))
+                           (else
+                            (<bracket_stat> inp2
+                                            (append listeStat (list sym))
+                                            cont)))))))))
 
 (trace <bracket_stat>)
 
@@ -268,7 +270,7 @@
                             inp
                             (lambda (inp)
                               (cont inp
-                                    (list 'PRINT expr))))))))
+                                    (list 'SEQ (list 'PRINT expr)))))))))
 (trace <print_stat>)
 
 ;; "(" <expr> ")
@@ -294,7 +296,7 @@
                       inp
                       (lambda (inp)
                         (cont inp
-                              (list 'EXPR expr))))))))
+                              (list 'SEQ (list 'EXPR expr)))))))))
 (trace <expr_stat>)
 
 ;;<test> | <id> "=" <expr>
@@ -356,7 +358,8 @@
                                     ;; term | (sym (term)) | (sym (sym .... ))
                                     (if (null? listeSum)
                                         sym1
-                                        (append listeSum (list sym1)))))))))))
+                                        (append listeSum
+                                                (list sym1)))))))))))
 
 ;;<term> | <mult> "*" <term> | <mult> "/" <term> | <mult> "%" <term>
 (define <mult>
@@ -418,14 +421,16 @@
 
 (define exec-stat
   (lambda (env output ast cont)
-    (display "ast courrant: ")(display ast)(newline)
-    (display "stat courrant: ")(display (car ast))(newline)
-    (case (car(car ast))
-
+    ;;(display "ast courrant: ")(display ast)(newline)
+    ;;(display "stat courrant: ")(display (caadr (cadr ast)))(newline)
+    ;;(pp (list 'what_to_pass_next (cadr (cadr (cadr ast)))))
+    (case (if (equal? (caadr ast) 'EMPTY)
+              'EMPTY
+              (caadr (cadr ast)))
       ((PRINT)
        (exec-expr env ;; evaluer l'expression du print
                   output
-                  (cadr(car ast))
+                  (cadr (cadr (cadr ast)))
                   (lambda (env output val)
                     (exec-stat env ;; ajouter le resultat a la sortie
                                (cond ((number? val)
@@ -442,15 +447,19 @@
                                cont))))
 
       ((EXPR)
+       (pp (list 'EXPR (cadr (cadr (cadr ast)))))
+       (pp (list 'NEXT_AST (cdr ast)))
        (exec-expr env ;; evaluer l'expression
                   output
-                  (cadr (car ast))
+                  (cadr (cadr (cadr ast)))
                   (lambda (env output val)
-                    (cont env output)))) ;; continuer en ignorant le resultat
-
-      ((ES);;END of Statement TODO peut probablement juste faire un () vide, mais faudra le traiter plus haut
+                    (pp (list 'RETURNED-TO-NEXT-EXECSTAT (cdr ast)))
+                    (exec-stat env ;; ajouter le resultat a la sortie
+                               output
+                               (cdr ast)
+                               cont))))
+      ((EMPTY);;END of Statement TODO peut probablement juste faire un () vide, mais faudra le traiter plus haut
        (cont env output))
-
       (else
        "internal error (unknown statement AST)\n"))))
 
@@ -477,6 +486,7 @@
           (cont env
                 output
                 (op num1 num2)))))
+    (pp (list 'EXEC-EXPR ast)) ;; TODO TEST
     (case (car ast)
       ((INT)
        (cont env
