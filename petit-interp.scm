@@ -60,18 +60,18 @@
            (let ((c (@ inp)))
              (pp c)
              (pp #\newline)
-             (cond ((chiffre? c)   (symbol-int inp cont))
-                   ((lettre? c)    (symbol-id inp cont))
-                   ((char=? c #\{)  (cont ($ inp) 'LBRK));; { Left Bracket
-                   ((char=? c #\})  (cont ($ inp) 'RBRK));; } Right Bracket
-                   ((char=? c #\()  (cont ($ inp) 'LPAR)) ;; (
-                   ((char=? c #\))  (cont ($ inp) 'RPAR)) ;; )
-                   ((char=? c #\;)  (cont ($ inp) 'SEMI)) ;; ;
-                   ((char=? c #\+)  (cont ($ inp) 'ADD)) ;; +
-                   ((char=? c #\-)  (cont ($ inp) 'SUB)) ;; -
-                   ((char=? c #\*)  (cont ($ inp) 'MUL)) ;; *
-                   ((char=? c #\/)  (cont ($ inp) 'DIV)) ;; /
-                   ((char=? c #\%)  (cont ($ inp) 'MOD)) ;; %
+             (cond ((chiffre?   c) (symbol-int inp  cont))
+                   ((lettre?    c) (symbol-id  inp  cont))
+                   ((char=? c #\{) (cont ($ inp)   'LBRK)) ;; { Left Bracket
+                   ((char=? c #\}) (cont ($ inp)   'RBRK)) ;; } Right Bracket
+                   ((char=? c #\() (cont ($ inp)   'LPAR)) ;; (
+                   ((char=? c #\)) (cont ($ inp)   'RPAR)) ;; )
+                   ((char=? c #\;) (cont ($ inp)   'SEMI)) ;; ;
+                   ((char=? c #\+) (cont ($ inp)   'ADD )) ;; +
+                   ((char=? c #\-) (cont ($ inp)   'SUB )) ;; -
+                   ((char=? c #\*) (cont ($ inp)   'MUL )) ;; *
+                   ((char=? c #\/) (cont ($ inp)   'DIV )) ;; /
+                   ((char=? c #\%) (cont ($ inp)   'MOD )) ;; %
                    (else
                     (let ((c2 (@ ($ inp))))
                       (pp 'c2)
@@ -80,17 +80,20 @@
                              (if (char=? c2 #\=)
                                  (cont ($ ($ inp)) 'EQ)
                                  (cont ($ inp) 'ASSIGN))) ;; ==
+
                             ((char=? c #\>)
                              (if (char=? c2 #\=)
-                                 (cont ($ ($ inp)) 'BTEQ)     ;; >=
+                                 (cont ($ ($ inp)) 'BTEQ) ;; >=
                                  (cont ($ inp) 'BT)))     ;; >
+
                             ((char=? c #\<)
                              (if (char=? c2 #\=)
-                                 (cont ($ ($ ($ inp))) 'LTEQ)     ;; <=
+                                 (cont ($ ($ inp)) 'LTEQ) ;; <=
                                  (cont ($ inp) 'LT)))     ;; <
+
                             ((char=? c #\!)
                              (if (char=? c2 #\=)
-                                 (cont ($ ($ inp)) 'NEQ)      ;; !=
+                                 (cont ($ ($ inp)) 'NEQ)  ;; !=
                                  (syntax-err)))
                             (else
                              (syntax-err)))))))))))
@@ -179,6 +182,8 @@
         (let ((id (list->string (reverse lst))))
           (cond ((string=? id "print")
                  (cont inp 'PRINT-SYM))
+                ((string=? id "if")
+                 (cont inp 'IF-SYM))
                 (else
                  (cont inp id)))))))
 
@@ -236,6 +241,8 @@
                 (case sym ;; determiner quel genre de <stat>
                   ((PRINT-SYM)
                    (<print_stat> inp2 cont))
+                  ((IF-SYM)
+                   (<if_stat> inp2 cont))
                   ((LBRK)
                    (<bracket_stat> inp2 '(SEQ) cont))
                   (else
@@ -261,7 +268,7 @@
                                             cont)))))))))
 
 (trace <bracket_stat>)
-
+;; print( <expr> )
 (define <print_stat>
   (lambda (inp cont)
     (<paren_expr> inp ;; analyser un <paren_expr>
@@ -272,6 +279,15 @@
                               (cont inp
                                     (list 'SEQ (list 'PRINT expr)))))))))
 (trace <print_stat>)
+(define <if_stat>
+  (lambda (inp cont)
+    (<paren_expr> inp ;; analyser un <paren_expr>
+                  (lambda (inp expr)
+                    (<stat> inp
+                            (lambda (inp stat)
+                              (cont inp
+                                    (list 'SEQ (list 'IF expr) stat))))))))
+
 
 ;; "(" <expr> ")
 (define <paren_expr>
@@ -403,6 +419,7 @@
 
 (define execute
   (lambda (ast)
+    (pp ast)
     (exec-stat '() ;; etat des variables globales
                ""  ;; sortie jusqu'a date
                ast ;; ASA du programme
@@ -421,7 +438,7 @@
 
 (define exec-stat
   (lambda (env output ast cont)
-    ;;(display "ast courrant: ")(display ast)(newline)
+    (display "ast courrant: ")(display ast)(newline)
     ;;(display "stat courrant: ")(display (caadr (cadr ast)))(newline)
     ;;(pp (list 'what_to_pass_next (cadr (cadr (cadr ast)))))
     (case (if (equal? (caadr ast) 'EMPTY)
@@ -458,6 +475,25 @@
                                output
                                (cdr ast)
                                cont))))
+      ((IF)
+       (pp (list 'IFEXPR (cadr (cadr ast))))
+       (exec-expr env
+                  output
+                  (cadr (cadr (cadr ast)))
+                  (lambda (env output val)
+                    (if val
+                        (exec-stat env
+                                   output
+                                   (caddr (cadr ast))
+                                   (lambda (env output val)
+                                     (exec-stat env
+                                                output
+                                                ast
+                                                cont)))
+                        (exec-stat env
+                                   output
+                                   (cdr ast)
+                                   cont)))))
       ((EMPTY);;END of Statement TODO peut probablement juste faire un () vide, mais faudra le traiter plus haut
        (cont env output))
       (else
