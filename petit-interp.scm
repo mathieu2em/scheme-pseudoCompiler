@@ -58,11 +58,14 @@
                    ((char=? c #\)) (cont ($ inp) 'RPAR)) ;; )
                    ((char=? c #\;) (cont ($ inp) 'SEMI)) ;; ;
                    ((char=? c #\=)  (cont ($ inp) 'EQ))  ;; =
-                   ((char=? c #\+)  (cont ($ inp) 'ADD));; +
-                   ((char=? c #\-)  (cont ($ inp) 'SUB));; -
-                   ((char=? c #\*)  (cont ($ inp) 'MUL));; *
-                   ((char=? c #\/)  (cont ($ inp) 'DIV));; /
-                   ((char=? c #\%)  (cont ($ inp) 'MOD));; /
+                   ((char=? c #\+)  (cont ($ inp) 'ADD)) ;; +
+                   ((char=? c #\-)  (cont ($ inp) 'SUB)) ;; -
+                   ((char=? c #\*)  (cont ($ inp) 'MUL)) ;; *
+                   ((char=? c #\/)  (cont ($ inp) 'DIV)) ;; /
+                   ((char=? c #\%)  (cont ($ inp) 'MOD)) ;; %
+                   ((char=? c #\>)  (cont ($ inp) 'BT)) ;; >
+                   ((char=? c #\<)  (cont ($ inp) 'ST)) ;; <
+                   ((char=? c #\!)  (cont ($ inp) 'PM)) ;; !
                    (else
                     (syntax-err))))))))
 
@@ -290,7 +293,26 @@
 ;;| <sum> ">" <sum> | <sum> ">=" <sum> | <sum> "==" <sum> | <sum> "!=" <sum>
 (define <test>
   (lambda (inp cont)
-    (<sum> inp '() cont)))
+    (<sum> inp
+           '()
+           (lambda (inp2 sym1) ;; gets next sym
+             (next-sym inp2
+                       (lambda (inp3 sym2) ;; gets next sym
+                         (if (or (equal? sym2 'ST);; <sum> "<" <sum>
+                                 (equal? sym2 'BT));; <sum> ">" <sum>
+                             (<sum> inp3 ;; calls sum on next sym
+                                    ;; the if will help format properly the operations
+                                    '()
+                                    (lambda (inp4 expr)
+                                      (display "sym1: ")(display sym1)(newline)
+                                      (display "sym2: ")(display sym2)(newline)
+                                      (display "expr: ")(display expr)(newline)
+                                      (display "inp3: ")(display inp3)(newline)
+                                      (cont inp4
+                                            (list sym2
+                                                  sym1
+                                                  expr))))
+                          (<sum> inp '() cont))))))))
 (trace <test>)
 ;;<mult> | <sum> "+" <mult> | <sum> "-" <mult>
 (define <sum>
@@ -388,12 +410,17 @@
                   (cadr(car ast))
                   (lambda (env output val)
                     (exec-stat env ;; ajouter le resultat a la sortie
-                                (string-append output
-                                               (number->string val)
-                                               "\n")
-                                (cdr ast)
-                                cont))))
-
+                               (cond ((number? val)
+                                      (string-append output
+                                                     (number->string val)
+                                                     "\n"))
+                                     (else
+                                      (string-append output
+                                                     val
+                                                     "\n")))
+                               (cdr ast)
+                               cont))))
+    
       ((EXPR)
        (exec-expr env ;; evaluer l'expression
                   output
@@ -501,9 +528,38 @@
          (cont env
                output
                (modulo num1 num2))))
-
-      (else
-       "internal error (unknown expression AST)\n"))))
+      ((ST)
+       (let((num1 (exec-expr env
+                             output
+                             (car (cdr ast))
+                             (lambda(env output val)
+                               val)))
+            (num2 (exec-expr env
+                             output
+                             (car(cdr(cdr ast)))
+                             (lambda(env output val)
+                               val))))
+         (cont env
+               output
+               (if (< num1 num2) "true"
+                   "false"))))
+       ((BT)
+       (let((num1 (exec-expr env
+                             output
+                             (car (cdr ast))
+                             (lambda(env output val)
+                               val)))
+            (num2 (exec-expr env
+                             output
+                             (car(cdr(cdr ast)))
+                             (lambda(env output val)
+                               val))))
+         (cont env
+               output
+               (if (> num1 num2) "true"
+                   "false"))))
+    (else
+     "internal error (unknown expression AST)\n"))))
 
 ;; Il faut enlever la trace avant la remise...
 
