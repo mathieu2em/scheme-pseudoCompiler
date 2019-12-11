@@ -18,6 +18,14 @@
 ;;; set!, set-car!, vector-set!, list-set!, begin, print, display,
 ;;; etc).
 
+(define-macro (one-of val =? lst)
+  (cond ((null? lst) #f)
+        ((null? (cdr lst))
+         `(,=? ,val ,(car lst)))
+        (else
+         `(or (,=? ,val ,(car lst))
+              (one-of ,val ,=? ,(cdr lst))))))
+
 ;; La fonction parse-and-execute recoit en parametre une liste des
 ;; caracteres qui constituent le programme a interpreter.  La
 ;; fonction retourne une chaine de caracteres qui sera imprimee comme
@@ -50,24 +58,45 @@
            (next-sym ($ inp) cont)) ;; sauter les blancs
           (else
            (let ((c (@ inp)))
-             (cond ((chiffre? c)   (symbol-int inp cont))
-                   ((lettre? c)    (symbol-id inp cont))
-                   ((char=? c #\{)  (cont ($ inp) 'LBRK));; { Left Bracket
-                   ((char=? c #\})  (cont ($ inp) 'RBRK));; } Right Bracket
-                   ((char=? c #\() (cont ($ inp) 'LPAR)) ;; (
-                   ((char=? c #\)) (cont ($ inp) 'RPAR)) ;; )
-                   ((char=? c #\;) (cont ($ inp) 'SEMI)) ;; ;
-                   ((char=? c #\=)  (cont ($ inp) 'EQ))  ;; =
-                   ((char=? c #\+)  (cont ($ inp) 'ADD)) ;; +
-                   ((char=? c #\-)  (cont ($ inp) 'SUB)) ;; -
-                   ((char=? c #\*)  (cont ($ inp) 'MUL)) ;; *
-                   ((char=? c #\/)  (cont ($ inp) 'DIV)) ;; /
-                   ((char=? c #\%)  (cont ($ inp) 'MOD)) ;; %
-                   ((char=? c #\>)  (cont ($ inp) 'BT)) ;; >
-                   ((char=? c #\<)  (cont ($ inp) 'ST)) ;; <
-                   ((char=? c #\!)  (cont ($ inp) 'PM)) ;; !
+             (pp c)
+             (pp #\newline)
+             (cond ((chiffre?   c) (symbol-int inp  cont))
+                   ((lettre?    c) (symbol-id  inp  cont))
+                   ((char=? c #\{) (cont ($ inp)   'LBRK)) ;; { Left Bracket
+                   ((char=? c #\}) (cont ($ inp)   'RBRK)) ;; } Right Bracket
+                   ((char=? c #\() (cont ($ inp)   'LPAR)) ;; (
+                   ((char=? c #\)) (cont ($ inp)   'RPAR)) ;; )
+                   ((char=? c #\;) (cont ($ inp)   'SEMI)) ;; ;
+                   ((char=? c #\+) (cont ($ inp)   'ADD )) ;; +
+                   ((char=? c #\-) (cont ($ inp)   'SUB )) ;; -
+                   ((char=? c #\*) (cont ($ inp)   'MUL )) ;; *
+                   ((char=? c #\/) (cont ($ inp)   'DIV )) ;; /
+                   ((char=? c #\%) (cont ($ inp)   'MOD )) ;; %
                    (else
-                    (syntax-err))))))))
+                    (let ((c2 (@ ($ inp))))
+                      (pp 'c2)
+                      (pp c2)
+                      (cond ((char=? c #\=)
+                             (if (char=? c2 #\=)
+                                 (cont ($ ($ inp)) 'EQ)
+                                 (cont ($ inp) 'ASSIGN))) ;; ==
+
+                            ((char=? c #\>)
+                             (if (char=? c2 #\=)
+                                 (cont ($ ($ inp)) 'BTEQ) ;; >=
+                                 (cont ($ inp) 'BT)))     ;; >
+
+                            ((char=? c #\<)
+                             (if (char=? c2 #\=)
+                                 (cont ($ ($ inp)) 'LTEQ) ;; <=
+                                 (cont ($ inp) 'LT)))     ;; <
+
+                            ((char=? c #\!)
+                             (if (char=? c2 #\=)
+                                 (cont ($ ($ inp)) 'NEQ)  ;; !=
+                                 (syntax-err)))
+                            (else
+                             (syntax-err)))))))))))
 
 ;; La fonction @ prend une liste de caractere possiblement vide et
 ;; retourne le premier caractere, ou le caractere #\nul si la liste
@@ -153,6 +182,8 @@
         (let ((id (list->string (reverse lst))))
           (cond ((string=? id "print")
                  (cont inp 'PRINT-SYM))
+                ((string=? id "if")
+                 (cont inp 'IF-SYM))
                 (else
                  (cont inp id)))))))
 
@@ -210,8 +241,10 @@
                 (case sym ;; determiner quel genre de <stat>
                   ((PRINT-SYM)
                    (<print_stat> inp2 cont))
+                  ((IF-SYM)
+                   (<if_stat> inp2 cont))
                   ((LBRK)
-                   (<bracket_stat> inp2 '() cont))
+                   (<bracket_stat> inp2 '(SEQ) cont))
                   (else
                    (<expr_stat> inp cont)))))))
 (trace <stat>)
@@ -223,17 +256,19 @@
               (next-sym inp2
                         (lambda(inp3 sym2)
                           (cond
-                                ((equal? sym2 'EOI);;si on atteint la fin du document sans trouver un '}'
-                                 (syntax-err))
-                                ((equal? sym2 'RBRK);;si on trouve un '}'
-                                 (cont inp3(append listeStat (list sym '(ES)))));; on ajoute un bloc statement ((<stat>)())
-                                (else
-                                 (<bracket_stat> inp2
-                                                 (append listeStat (list sym))
-                                                 cont)))))))))
+                           ;;si on atteint la fin du document sans trouver un '}'
+                           ((equal? sym2 'EOI)
+                            (syntax-err))
+                           ((equal? sym2 'RBRK);;si on trouve un '}'
+                            ;; on ajoute un bloc statement ((<stat>)())
+                            (cont inp3 (append listeStat (list sym (list 'EMPTY)))))
+                           (else
+                            (<bracket_stat> inp2
+                                            (append listeStat (list sym))
+                                            cont)))))))))
 
 (trace <bracket_stat>)
-
+;; print( <expr> )
 (define <print_stat>
   (lambda (inp cont)
     (<paren_expr> inp ;; analyser un <paren_expr>
@@ -242,8 +277,17 @@
                             inp
                             (lambda (inp)
                               (cont inp
-                                    (list 'PRINT expr))))))))
+                                    (list 'SEQ (list 'PRINT expr)))))))))
 (trace <print_stat>)
+(define <if_stat>
+  (lambda (inp cont)
+    (<paren_expr> inp ;; analyser un <paren_expr>
+                  (lambda (inp expr)
+                    (<stat> inp
+                            (lambda (inp stat)
+                              (cont inp
+                                    (list 'SEQ (list 'IF expr) stat))))))))
+
 
 ;; "(" <expr> ")
 (define <paren_expr>
@@ -268,7 +312,7 @@
                       inp
                       (lambda (inp)
                         (cont inp
-                              (list 'EXPR expr))))))))
+                              (list 'SEQ (list 'EXPR expr)))))))))
 (trace <expr_stat>)
 
 ;;<test> | <id> "=" <expr>
@@ -279,11 +323,11 @@
                 (next-sym inp2 ;; verifier 2e symbole du <expr>
                           (lambda (inp3 sym2)
                             (if (and (string? sym1) ;; combinaison "id =" ?
-                                     (equal? sym2 'EQ))
+                                     (equal? sym2 'ASSIGN))
                                 (<expr> inp3
                                         (lambda (inp expr)
                                           (cont inp
-                                                (list 'ASSIGN
+                                                (list 'EQ
                                                       sym1
                                                       expr))))
                                 (<test> inp cont))))))))
@@ -298,16 +342,11 @@
            (lambda (inp2 sym1) ;; gets next sym
              (next-sym inp2
                        (lambda (inp3 sym2) ;; gets next sym
-                         (if (or (equal? sym2 'ST);; <sum> "<" <sum>
-                                 (equal? sym2 'BT));; <sum> ">" <sum>
+                         (if (one-of sym2 equal? (list 'LT 'BT 'LEQ 'BEQ 'EQ 'ASSIGN 'NEQ))
                              (<sum> inp3 ;; calls sum on next sym
                                     ;; the if will help format properly the operations
                                     '()
                                     (lambda (inp4 expr)
-                                      (display "sym1: ")(display sym1)(newline)
-                                      (display "sym2: ")(display sym2)(newline)
-                                      (display "expr: ")(display expr)(newline)
-                                      (display "inp3: ")(display inp3)(newline)
                                       (cont inp4
                                             (list sym2
                                                   sym1
@@ -322,8 +361,7 @@
             (lambda (inp2 sym1) ;; gets next sym
               (next-sym inp2
                         (lambda (inp3 sym2) ;; gets next sym
-                          (if (or (equal? sym2 'ADD)
-                                  (equal? sym2 'SUB))
+                          (if (one-of sym2 equal? (list 'ADD 'SUB))
                               (<sum> inp3 ;; calls sum on next sym
                                      ;; the if will help format properly the operations
                                      (if (null? listeSum) ;; premiere rec
@@ -336,7 +374,8 @@
                                     ;; term | (sym (term)) | (sym (sym .... ))
                                     (if (null? listeSum)
                                         sym1
-                                        (append listeSum (list sym1)))))))))))
+                                        (append listeSum
+                                                (list sym1)))))))))))
 
 ;;<term> | <mult> "*" <term> | <mult> "/" <term> | <mult> "%" <term>
 (define <mult>
@@ -345,9 +384,7 @@
             (lambda (inp2 sym1)
               (next-sym inp2
                         (lambda (inp3 sym2)
-                          (if (or (equal? sym2 'MOD)
-                                  (equal? sym2 'MUL)
-                                  (equal? sym2 'DIV))
+                          (if (one-of sym2 equal? (list 'MOD 'MUL 'DIV))
                               (<mult> inp3
                                       (if (null? listeMult)
                                           (cons sym2 (list sym1))
@@ -382,6 +419,7 @@
 
 (define execute
   (lambda (ast)
+    (pp ast)
     (exec-stat '() ;; etat des variables globales
                ""  ;; sortie jusqu'a date
                ast ;; ASA du programme
@@ -401,13 +439,15 @@
 (define exec-stat
   (lambda (env output ast cont)
     (display "ast courrant: ")(display ast)(newline)
-    (display "stat courrant: ")(display (car ast))(newline)
-    (case (car(car ast))
-
+    ;;(display "stat courrant: ")(display (caadr (cadr ast)))(newline)
+    ;;(pp (list 'what_to_pass_next (cadr (cadr (cadr ast)))))
+    (case (if (equal? (caadr ast) 'EMPTY)
+              'EMPTY
+              (caadr (cadr ast)))
       ((PRINT)
        (exec-expr env ;; evaluer l'expression du print
                   output
-                  (cadr(car ast))
+                  (cadr (cadr (cadr ast)))
                   (lambda (env output val)
                     (exec-stat env ;; ajouter le resultat a la sortie
                                (cond ((number? val)
@@ -416,22 +456,47 @@
                                                      "\n"))
                                      (else
                                       (string-append output
-                                                     val
+                                                     (if val
+                                                         "true"
+                                                         "false")
                                                      "\n")))
                                (cdr ast)
                                cont))))
-    
+
       ((EXPR)
+       (pp (list 'EXPR (cadr (cadr (cadr ast)))))
+       (pp (list 'NEXT_AST (cdr ast)))
        (exec-expr env ;; evaluer l'expression
                   output
-                  (cadr (car ast))
+                  (cadr (cadr (cadr ast)))
                   (lambda (env output val)
-                    (cont env output)))) ;; continuer en ignorant le resultat
-      
-      ((ES);;END of Statement TODO peut probablement juste faire un () vide, mais faudra le traiter plus haut
-       (cont env output)
-       )
-      ;;((ASSIGN))
+                    (pp (list 'RETURNED-TO-NEXT-EXECSTAT (cdr ast)))
+                    (exec-stat env ;; ajouter le resultat a la sortie
+                               output
+                               (cdr ast)
+                               cont))))
+      ((IF)
+       ;;(pp (list 'IFEXPR (cadr (cadr ast))))
+       (exec-expr env
+                  output
+                  (cadr (cadr (cadr ast)))
+                  (lambda (env output val)
+                    (pp (list env output val))
+                    (if val
+                        (exec-stat env
+                                   output
+                                   (caddr (cadr ast))
+                                   (lambda (env output)
+                                     (exec-stat env
+                                                output
+                                                (cdr ast)
+                                                cont)))
+                        (exec-stat env
+                                   output
+                                   (cdr ast)
+                                   cont)))))
+      ((EMPTY);;END of Statement TODO peut probablement juste faire un () vide, mais faudra le traiter plus haut
+       (cont env output))
       (else
        "internal error (unknown statement AST)\n"))))
 
@@ -447,117 +512,37 @@
 
 (define exec-expr
   (lambda (env output ast cont)
+    (define (exec-op op)
+      (let ((func (lambda (elem) (exec-expr env
+                            output
+                            elem;;(car (cdr ast))
+                            (lambda(env output val)
+                              val)))))
+        (let ((num1 (func (cadr ast)))
+              (num2 (func (caddr ast))))
+          (cont env
+                output
+                (op num1 num2)))))
+    (pp (list 'EXEC-EXPR ast)) ;; TODO TEST
     (case (car ast)
-
       ((INT)
        (cont env
              output
              (cadr ast))) ;; retourner la valeur de la constante
-
       ((ADD)
-       (let((num1 (exec-expr env
-                             output
-                             (car (cdr ast))
-                             (lambda(env output val)
-                               val)))
-            (num2 (exec-expr env
-                             output
-                             (car(cdr(cdr ast)))
-                             (lambda(env output val)
-                               val))))
-         (cont env
-               output
-               (+ num1 num2))))
-
+       (exec-op + ))
       ((SUB)
-       (let((num1 (exec-expr env
-                             output
-                             (car (cdr ast))
-                             (lambda(env output val)
-                               val)))
-            (num2 (exec-expr env
-                             output
-                             (car(cdr(cdr ast)))
-                             (lambda(env output val)
-                               val))))
-         (cont env
-               output
-               (- num1 num2))))
-
+       (exec-op -))
       ((MUL)
-       (let((num1 (exec-expr env
-                             output
-                             (car (cdr ast))
-                             (lambda(env output val)
-                               val)))
-            (num2 (exec-expr env
-                             output
-                             (car(cdr(cdr ast)))
-                             (lambda(env output val)
-                               val))))
-         (cont env
-               output
-               (* num1 num2))))
-
+       (exec-op *))
       ((DIV)
-       (let((num1 (exec-expr env
-                             output
-                             (car (cdr ast))
-                             (lambda(env output val)
-                               val)))
-            (num2 (exec-expr env
-                             output
-                             (car(cdr(cdr ast)))
-                             (lambda(env output val)
-                               val))))
-         (cont env
-               output
-               (/ num1 num2))))
-
+       (exec-op /))
       ((MOD)
-       (let((num1 (exec-expr env
-                             output
-                             (car (cdr ast))
-                             (lambda(env output val)
-                               val)))
-            (num2 (exec-expr env
-                             output
-                             (car(cdr(cdr ast)))
-                             (lambda(env output val)
-                               val))))
-         (cont env
-               output
-               (modulo num1 num2))))
-      ((ST)
-       (let((num1 (exec-expr env
-                             output
-                             (car (cdr ast))
-                             (lambda(env output val)
-                               val)))
-            (num2 (exec-expr env
-                             output
-                             (car(cdr(cdr ast)))
-                             (lambda(env output val)
-                               val))))
-         (cont env
-               output
-               (if (< num1 num2) "true"
-                   "false"))))
-       ((BT)
-       (let((num1 (exec-expr env
-                             output
-                             (car (cdr ast))
-                             (lambda(env output val)
-                               val)))
-            (num2 (exec-expr env
-                             output
-                             (car(cdr(cdr ast)))
-                             (lambda(env output val)
-                               val))))
-         (cont env
-               output
-               (if (> num1 num2) "true"
-                   "false"))))
+       (exec-op modulo))
+      ((LT)
+       (exec-op <))
+      ((BT)
+       (exec-op >))
     (else
      "internal error (unknown expression AST)\n"))))
 
