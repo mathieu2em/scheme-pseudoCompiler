@@ -182,8 +182,10 @@
         (let ((id (list->string (reverse lst))))
           (cond ((string=? id "print")
                  (cont inp 'PRINT-SYM))
-                ((string=? id "if")
+                ((string=? id "if") ;; TODO IF ELSE has to be implemented too
                  (cont inp 'IF-SYM))
+                ((string=? id "while")
+                 (cont inp 'WHILE-SYM))
                 (else
                  (cont inp id)))))))
 
@@ -243,6 +245,8 @@
                    (<print_stat> inp2 cont))
                   ((IF-SYM)
                    (<if_stat> inp2 cont))
+                  ((WHILE-SYM)
+                   (<while_stat> inp2 cont))
                   ((LBRK)
                    (<bracket_stat> inp2 '(SEQ) cont))
                   (else
@@ -288,6 +292,15 @@
                               (cont inp
                                     (list 'SEQ (list 'IF expr) stat))))))))
 
+(define <while_stat>
+  (lambda (inp cont)
+    (<paren_expr> inp
+                  (lambda (inp expr)
+                    (<stat> inp
+                            (lambda (inp stat)
+                              (cont inp
+                                    (list 'SEQ (list 'WHILE expr) stat))))))))
+
 
 ;; "(" <expr> ")
 (define <paren_expr>
@@ -327,7 +340,7 @@
                                 (<expr> inp3
                                         (lambda (inp expr)
                                           (cont inp
-                                                (list 'EQ
+                                                (list 'ASSIGN
                                                       sym1
                                                       expr))))
                                 (<test> inp cont))))))))
@@ -495,6 +508,26 @@
                                    output
                                    (cdr ast)
                                    cont)))))
+      ((WHILE)
+       (exec-expr env
+                   output
+                   (cadr (cadr (cadr ast)))
+                   (lambda (env output val)
+                     (pp (list env output val))
+                     (if val
+                         (exec-stat env
+                                    output
+                                    (caddr (cadr ast))
+                                    (lambda (env output)
+                                      (exec-stat env
+                                                 output
+                                                 ast
+                                                 cont)))
+                         (exec-stat env
+                                    output
+                                    (cdr ast)
+                                    cont)))))
+
       ((EMPTY);;END of Statement TODO peut probablement juste faire un () vide, mais faudra le traiter plus haut
        (cont env output))
       (else
@@ -512,6 +545,16 @@
 
 (define exec-expr
   (lambda (env output ast cont)
+
+    (define (getElem var lst)
+      (cond ((or (not (list? lst))
+                 (null? lst))
+             (syntax-err))
+            ((string=? (caar lst) var)
+             (cadar lst))
+            (else
+             (getElem var (cdr lst)))))
+
     (define (exec-op op)
       (let ((func (lambda (elem) (exec-expr env
                             output
@@ -523,12 +566,16 @@
           (cont env
                 output
                 (op num1 num2)))))
-    (pp (list 'EXEC-EXPR ast)) ;; TODO TEST
+    (pp (list 'EXEC-EXPR env output ast)) ;; TODO TEST
     (case (car ast)
       ((INT)
        (cont env
              output
              (cadr ast))) ;; retourner la valeur de la constante
+      ((VAR)
+       (cont env
+             output
+             (getElem (cadr ast) env)))
       ((ADD)
        (exec-op + ))
       ((SUB)
@@ -543,6 +590,13 @@
        (exec-op <))
       ((BT)
        (exec-op >))
+      ((ASSIGN)
+       (pp (list 'ASSIGN (cadr ast) 'AST ast))
+       (cont (append (list (list (cadr ast)
+                                 (cadr (caddr ast))))
+                     env)
+             output
+             (cadr ast)))
     (else
      "internal error (unknown expression AST)\n"))))
 
