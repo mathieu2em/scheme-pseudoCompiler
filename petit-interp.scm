@@ -184,6 +184,8 @@
                  (cont inp 'WHILE-SYM))
                 ((string=? id "else")
                  (cont inp 'ELSE-SYM))
+                 ((string=? id "do")
+                 (cont inp 'DO-SYM))
                 (else
                  (cont inp id)))))))
 
@@ -247,6 +249,8 @@
                    (<while_stat> inp2 cont))
                   ((LBRK)
                    (<bracket_stat> inp2 '(SEQ) cont))
+                  ((DO-SYM)
+                   (<do_stat> inp2 cont))
                   (else
                    (<expr_stat> inp cont)))))))
 (trace <stat>)
@@ -268,6 +272,24 @@
                             (<bracket_stat> inp2
                                             (append listeStat (list sym))
                                             cont)))))))))
+
+(define <do_stat>
+  (lambda (inp cont)
+    (<stat> inp
+            (lambda (inp stat)
+              (next-sym inp
+                        (lambda(inp2 stat2)
+                          (cond
+                           ((equal? stat2 'WHILE-SYM);;doit etre suivi de "while"
+                            (<paren_expr> inp2
+                                          (lambda (inp3 expr)
+                                            (expect 'SEMI;;doit etre suivi de ";"
+                                                    inp3
+                                                    (lambda (inp3)
+                                                      (cont inp2
+                                                            (list 'SEQ (list 'DO-WHILE stat) expr)))))))
+                          (else
+                           (syntax-err)))))))))
 
 (trace <bracket_stat>)
 ;; print( <expr> )
@@ -562,6 +584,29 @@
                                     output
                                     (cdr ast)
                                     cont)))))
+
+      ((DO-WHILE)
+       (exec-stat env;;stat
+                  output
+                  (cadr (cadr (cadr ast)))
+                  (lambda (env output)
+                    (exec-expr env;;eval
+                               output
+                               (caddr (cadr ast))
+                               (lambda (env output val)
+                                 (if val
+                                     (exec-stat env
+                                                output
+                                                (cadr (cadr (cadr ast)))
+                                                (lambda (env output)
+                                                  (exec-stat env
+                                                             output
+                                                             ast
+                                                             cont)))
+                                     (exec-stat env
+                                                output
+                                                (cdr ast)
+                                                cont)))))))
 
       ((EMPTY);;END of Statement TODO peut probablement juste faire un () vide, mais faudra le traiter plus haut
        (cont env output))
