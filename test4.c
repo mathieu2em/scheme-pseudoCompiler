@@ -1,7 +1,7 @@
 {
-    if(1>2){
-        print(1);
-    }else{
-        print(2);
-    }
+  a=10;
+  while(a<20){
+    print(a);
+    a=a+1;
+  }
 }
