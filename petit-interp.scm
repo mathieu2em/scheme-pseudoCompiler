@@ -476,19 +476,20 @@
                                (cdr ast)
                                cont))))
       ((IF)
-       (pp (list 'IFEXPR (cadr (cadr ast))))
+       ;;(pp (list 'IFEXPR (cadr (cadr ast))))
        (exec-expr env
                   output
                   (cadr (cadr (cadr ast)))
                   (lambda (env output val)
+                    (pp (list env output val))
                     (if val
                         (exec-stat env
                                    output
                                    (caddr (cadr ast))
-                                   (lambda (env output val)
+                                   (lambda (env output)
                                      (exec-stat env
                                                 output
-                                                ast
+                                                (cdr ast)
                                                 cont)))
                         (exec-stat env
                                    output
