@@ -58,8 +58,6 @@
            (next-sym ($ inp) cont)) ;; sauter les blancs
           (else
            (let ((c (@ inp)))
-             (pp c)
-             (pp #\newline)
              (cond ((chiffre?   c) (symbol-int inp  cont))
                    ((lettre?    c) (symbol-id  inp  cont))
                    ((char=? c #\{) (cont ($ inp)   'LBRK)) ;; { Left Bracket
@@ -74,8 +72,6 @@
                    ((char=? c #\%) (cont ($ inp)   'MOD )) ;; %
                    (else
                     (let ((c2 (@ ($ inp))))
-                      (pp 'c2)
-                      (pp c2)
                       (cond ((char=? c #\=)
                              (if (char=? c2 #\=)
                                  (cont ($ ($ inp)) 'EQ)
@@ -186,6 +182,8 @@
                  (cont inp 'IF-SYM))
                 ((string=? id "while")
                  (cont inp 'WHILE-SYM))
+                ((string=? id "else")
+                 (cont inp 'ELSE-SYM))
                 (else
                  (cont inp id)))))))
 
@@ -289,8 +287,20 @@
                   (lambda (inp expr)
                     (<stat> inp
                             (lambda (inp stat)
-                              (cont inp
-                                    (list 'SEQ (list 'IF expr) stat))))))))
+                              (next-sym inp
+                                        (lambda(inp2 stat2)
+                                        (display "inp2 if: ")(display inp2)(newline)
+                                        (display "stat2 if: ")(display stat2)(newline)
+                                        (cond
+                                         ((equal? stat2 'ELSE-SYM)
+                                          (<stat> inp2
+                                                   (lambda (inp3 stat3)
+                                                     (display "stat2")(display stat2)(newline)
+                                                     (cont inp3
+                                                           (list 'SEQ (list 'IF-ELSE expr) stat stat3)))))
+                                         (else
+                                          (cont inp
+                                                (list 'SEQ (list 'IF expr) stat))))))))))))
 
 (define <while_stat>
   (lambda (inp cont)
@@ -432,7 +442,6 @@
 
 (define execute
   (lambda (ast)
-    (pp ast)
     (exec-stat '() ;; etat des variables globales
                ""  ;; sortie jusqu'a date
                ast ;; ASA du programme
@@ -452,7 +461,7 @@
 (define exec-stat
   (lambda (env output ast cont)
     (display "ast courrant: ")(display ast)(newline)
-    ;;(display "stat courrant: ")(display (caadr (cadr ast)))(newline)
+    (display "stat courrant: ")(display (caadr ast))(newline)
     ;;(pp (list 'what_to_pass_next (cadr (cadr (cadr ast)))))
     (case (if (equal? (caadr ast) 'EMPTY)
               'EMPTY
@@ -477,8 +486,6 @@
                                cont))))
 
       ((EXPR)
-       (pp (list 'EXPR (cadr (cadr (cadr ast)))))
-       (pp (list 'NEXT_AST (cdr ast)))
        (exec-expr env ;; evaluer l'expression
                   output
                   (cadr (cadr (cadr ast)))
@@ -494,12 +501,14 @@
                   output
                   (cadr (cadr (cadr ast)))
                   (lambda (env output val)
-                    (pp (list env output val))
+                    (pp (list "if: " env output val))
                     (if val
                         (exec-stat env
                                    output
                                    (caddr (cadr ast))
                                    (lambda (env output)
+                                     (pp(list "sequence if: "(caddr (cadr ast))))
+                                     (pp(list "suite if: "(cdr ast)))
                                      (exec-stat env
                                                 output
                                                 (cdr ast)
@@ -508,12 +517,38 @@
                                    output
                                    (cdr ast)
                                    cont)))))
+      ((IF-ELSE)
+       ;;(pp (list 'IFEXPR (cadr (cadr ast))))
+       (exec-expr env
+                  output
+                  (cadr (cadr (cadr ast)))
+                  (lambda (env output val)
+                    (pp (list "if-else: " env output val))
+                    (if val
+                        (exec-stat env;;TRUE
+                                   output
+                                   (caddr (cadr ast))
+                                   (lambda (env output)
+                                     (pp(list "sequence if-else true: "(caddr (cadr ast))))
+                                     (pp(list "suite if-else: "(cdr ast)))
+                                     (exec-stat env
+                                                output
+                                                (cdr ast)
+                                                cont)))
+                        (exec-stat env;;TRUE
+                                   output
+                                   (cadddr (cadr ast))
+                                   (lambda (env output)
+                                     (pp(list "sequence if-else false: "(caddr (cadr ast))))
+                                     (exec-stat env
+                                                output
+                                                (cdr ast)
+                                                cont)))))))
       ((WHILE)
        (exec-expr env
                    output
                    (cadr (cadr (cadr ast)))
                    (lambda (env output val)
-                     (pp (list env output val))
                      (if val
                          (exec-stat env
                                     output
@@ -565,12 +600,10 @@
 
         (let ((num1 (func (cadr ast)))
               (num2 (func (caddr ast))))
-          (pp (list num1 num2))
           (cont env
                 output
                 (op num1 num2)))))
-
-    (pp (list 'EXEC-EXPR env output ast)) ;; TODO TEST
+    
     (case (car ast)
       ((INT)
        (cont env
@@ -580,7 +613,6 @@
        (cont env
              output
              (let ((val (isThere? (cadr ast) env)))
-               (pp (list 'VALVALUE val))
                (if (symbol? val)
                    (syntax-err)
                    val))))
@@ -599,7 +631,6 @@
       ((BT)
        (exec-op >))
       ((ASSIGN)
-       (pp (list 'ASSIGN (cadr ast) 'AST ast))
        (exec-expr env
                   output
                   (caddr ast)
