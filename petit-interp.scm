@@ -545,27 +545,31 @@
 
 (define exec-expr
   (lambda (env output ast cont)
-
-    (define (getElem var lst)
+    ;; returns 'NO if not there else return value
+    (define (isThere? var lst)
       (cond ((or (not (list? lst))
                  (null? lst))
-             (syntax-err))
+             'NO)
             ((string=? (caar lst) var)
              (cadar lst))
             (else
-             (getElem var (cdr lst)))))
+             (isThere? var (cdr lst)))))
 
     (define (exec-op op)
-      (let ((func (lambda (elem) (exec-expr env
-                            output
-                            elem;;(car (cdr ast))
-                            (lambda(env output val)
-                              val)))))
+      (let ((func (lambda (elem)
+                    (exec-expr env
+                               output
+                               elem;;(car (cdr ast))
+                               (lambda(env output val)
+                                 val)))))
+
         (let ((num1 (func (cadr ast)))
               (num2 (func (caddr ast))))
+          (pp (list num1 num2))
           (cont env
                 output
                 (op num1 num2)))))
+
     (pp (list 'EXEC-EXPR env output ast)) ;; TODO TEST
     (case (car ast)
       ((INT)
@@ -575,7 +579,11 @@
       ((VAR)
        (cont env
              output
-             (getElem (cadr ast) env)))
+             (let ((val (isThere? (cadr ast) env)))
+               (pp (list 'VALVALUE val))
+               (if (symbol? val)
+                   (syntax-err)
+                   val))))
       ((ADD)
        (exec-op + ))
       ((SUB)
@@ -592,11 +600,15 @@
        (exec-op >))
       ((ASSIGN)
        (pp (list 'ASSIGN (cadr ast) 'AST ast))
-       (cont (append (list (list (cadr ast)
-                                 (cadr (caddr ast))))
-                     env)
-             output
-             (cadr ast)))
+       (exec-expr env
+                  output
+                  (caddr ast)
+                  (lambda(env output val)
+                    (cont (append (list (list (cadr ast)
+                                              val))
+                                  env)
+                          output
+                          (cadr ast)))))
     (else
      "internal error (unknown expression AST)\n"))))
 
