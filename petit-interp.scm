@@ -389,7 +389,7 @@
            (lambda (inp2 sym1) ;; gets next sym
              (next-sym inp2
                        (lambda (inp3 sym2) ;; gets next sym
-                         (if (one-of sym2 equal? (list 'LT 'BT 'LEQ 'BEQ 'EQ 'ASSIGN 'NEQ))
+                         (if (one-of sym2 equal? (list 'LT 'BT 'LTEQ 'BTEQ 'EQ 'ASSIGN 'NEQ))
                              (<sum> inp3 ;; calls sum on next sym
                                     ;; the if will help format properly the operations
                                     '()
