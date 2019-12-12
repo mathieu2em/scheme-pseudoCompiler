@@ -78,6 +78,7 @@
                                  (cont ($ inp) 'ASSIGN))) ;; ==
 
                             ((char=? c #\>)
+                             (pp (list 'BTEQ c c2 ($ ($ inp))))
                              (if (char=? c2 #\=)
                                  (cont ($ ($ inp)) 'BTEQ) ;; >=
                                  (cont ($ inp) 'BT)))     ;; >
@@ -311,18 +312,19 @@
                             (lambda (inp stat)
                               (next-sym inp
                                         (lambda(inp2 stat2)
-                                        (display "inp2 if: ")(display inp2)(newline)
-                                        (display "stat2 if: ")(display stat2)(newline)
-                                        (cond
-                                         ((equal? stat2 'ELSE-SYM)
-                                          (<stat> inp2
-                                                   (lambda (inp3 stat3)
-                                                     (display "stat2")(display stat2)(newline)
-                                                     (cont inp3
-                                                           (list 'SEQ (list 'IF-ELSE expr) stat stat3)))))
-                                         (else
-                                          (cont inp
-                                                (list 'SEQ (list 'IF expr) stat))))))))))))
+                                          (display "inp2 if: ")(display inp2)(newline)
+                                          (display "stat2 if: ")(display stat2)(newline)
+                                          (cond
+                                           ((equal? stat2 'ELSE-SYM)
+                                            (<stat> inp2
+                                                    (lambda (inp3 stat3)
+                                                      (display "stat2")(display stat2)(newline)
+                                                      (cont inp3
+                                                            (list 'SEQ (list 'IF-ELSE expr) stat stat3)))))
+                                           (else
+                                            (cont inp
+                                                  (list 'SEQ (list 'IF expr) stat))))))))))))
+(trace <if_stat>)
 
 (define <while_stat>
   (lambda (inp cont)
@@ -625,6 +627,8 @@
 
 (define exec-expr
   (lambda (env output ast cont)
+    (define (!= x y)
+      (not (equal? x y)))
     ;; returns 'NO if not there else return value
     (define (isThere? var lst)
       (cond ((or (not (list? lst))
@@ -648,7 +652,7 @@
           (cont env
                 output
                 (op num1 num2)))))
-    
+
     (case (car ast)
       ((INT)
        (cont env
@@ -675,6 +679,14 @@
        (exec-op <))
       ((BT)
        (exec-op >))
+      ((EQ)
+       (exec-op equal?)) ;; TODO verifier arbre synthaxique
+      ((BTEQ)
+       (exec-op >=))
+      ((LTEQ)
+       (exec-op <=))
+      ((NEQ)
+       (exec-op !=))
       ((ASSIGN)
        (exec-expr env
                   output
