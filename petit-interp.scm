@@ -78,7 +78,7 @@
                                  (cont ($ inp) 'ASSIGN))) ;; ==
 
                             ((char=? c #\>)
-                             (pp (list 'BTEQ c c2 ($ ($ inp))))
+;;                             (pp (list 'BTEQ c c2 ($ ($ inp))))
                              (if (char=? c2 #\=)
                                  (cont ($ ($ inp)) 'BTEQ) ;; >=
                                  (cont ($ inp) 'BT)))     ;; >
@@ -221,6 +221,7 @@
                  (expect 'EOI ;; verifier qu'il n'y a rien apres
                          inp
                          (lambda (inp)
+                           (pp (list 'PPPARSE inp program))
                            (cont program)))))))
 
 ;; Les fonctions suivantes, <program>, <stat>, ... recoivent deux
@@ -235,31 +236,46 @@
 
 (define <program>
   (lambda (inp cont)
-    (<stat> inp cont))) ;; analyser un <stat>
+    (<stat> inp '()
+            cont))) ;; analyser un <stat>
+
+(define (rearrangeASA liste)
+  (pp liste)
+  (if (pair? liste)
+      (let ((last-elem (car (reverse liste))))
+        (pp last-elem)
+        (rearrangeASAhelper (cdr (reverse liste)) (list 'SEQ last-elem (list 'EMPTY))))
+      '()))
+
+(define (rearrangeASAhelper liste result)
+  (if (null? liste)
+      result
+      (rearrangeASAhelper (cdr liste) (list 'SEQ (car liste) result)) ))
 
 (define <stat>
-  (lambda (inp cont)
+  (lambda (inp liste cont)
     (next-sym inp
               (lambda (inp2 sym)
                 (case sym ;; determiner quel genre de <stat>
                   ((PRINT-SYM)
-                   (<print_stat> inp2 cont))
+                   (<print_stat> inp2 '() cont))
                   ((IF-SYM)
                    (<if_stat> inp2 cont))
                   ((WHILE-SYM)
                    (<while_stat> inp2 cont))
                   ((LBRK)
-                   (<bracket_stat> inp2 '(SEQ) cont))
+                   (<bracket_stat> inp2 '() cont))
                   ((DO-SYM)
-                   (<do_stat> inp2 cont))
+                   (<do_stat> inp2 '() cont))
                   (else
-                   (<expr_stat> inp cont)))))))
-(trace <stat>)
+                   (<expr_stat> inp '() cont)))))))
 
 (define <bracket_stat>
   (lambda (inp listeStat cont)
     (<stat> inp ;;fait le statement a l'interieur
+            '()
             (lambda (inp2 sym);;regarde le symbole apres
+              (pp sym)
               (next-sym inp2
                         (lambda(inp3 sym2)
                           (cond
@@ -268,15 +284,23 @@
                             (syntax-err))
                            ((equal? sym2 'RBRK);;si on trouve un '}'
                             ;; on ajoute un bloc statement ((<stat>)())
-                            (cont inp3 (append listeStat (list sym (list 'EMPTY)))))
+                            (cont inp3
+                                  ;; (list 'SEQ (list (list 'SEQ sym)))
+                                  (rearrangeASA (append listeStat (list sym)))))
+
+                                  ;;(list 'SEQ listeStat (list 'SEQ sym (list 'EMPTY)))))
                            (else
                             (<bracket_stat> inp2
-                                            (append listeStat (list sym))
-                                            cont)))))))))
+                                    (if (null? listeStat)
+                                        (list sym)
+                                        (append listeStat
+                                              (list sym)))
+                                    cont)))))))))
 
 (define <do_stat>
   (lambda (inp cont)
     (<stat> inp
+            '()
             (lambda (inp stat)
               (next-sym inp
                         (lambda(inp2 stat2)
@@ -288,52 +312,57 @@
                                                     inp3
                                                     (lambda (inp3)
                                                       (cont inp2
-                                                            (list 'SEQ (list 'DO-WHILE stat) expr)))))))
+                                                            ))))))
+                                                            ;;(list 'SEQ (list 'DO-WHILE stat) expr)))))))
                           (else
                            (syntax-err)))))))))
 
-(trace <bracket_stat>)
+;;(trace <bracket_stat>)
 ;; print( <expr> )
 (define <print_stat>
-  (lambda (inp cont)
+  (lambda (inp listeStat cont)
     (<paren_expr> inp ;; analyser un <paren_expr>
                   (lambda (inp expr)
                     (expect 'SEMI ;; verifier qu'il y a ";" apres
                             inp
                             (lambda (inp)
+                              ;;(pp (list 'PPPRINTSTAT listeStat 'PRINT expr))
                               (cont inp
-                                    (list 'SEQ (list 'PRINT expr)))))))))
-(trace <print_stat>)
+                                    (append listeStat (list 'PRINT expr)))))))))
+;;(trace <print_stat>)
 (define <if_stat>
   (lambda (inp cont)
     (<paren_expr> inp ;; analyser un <paren_expr>
                   (lambda (inp expr)
                     (<stat> inp
+                            '()
                             (lambda (inp stat)
                               (next-sym inp
                                         (lambda(inp2 stat2)
-                                          (display "inp2 if: ")(display inp2)(newline)
-                                          (display "stat2 if: ")(display stat2)(newline)
+;;                                          (display "inp2 if: ")(display inp2)(newline)
+;;                                          (display "stat2 if: ")(display stat2)(newline)
                                           (cond
                                            ((equal? stat2 'ELSE-SYM)
                                             (<stat> inp2
+                                                    '()
                                                     (lambda (inp3 stat3)
-                                                      (display "stat2")(display stat2)(newline)
+;;                                                      (display "stat2")(display stat2)(newline)
                                                       (cont inp3
-                                                            (list 'SEQ (list 'IF-ELSE expr) stat stat3)))))
+                                                            (list 'IF-ELSE expr stat stat3)))))
                                            (else
                                             (cont inp
-                                                  (list 'SEQ (list 'IF expr) stat))))))))))))
-(trace <if_stat>)
+                                                  (list 'IF expr stat))))))))))))
+;;(trace <if_stat>)
 
 (define <while_stat>
   (lambda (inp cont)
     (<paren_expr> inp
                   (lambda (inp expr)
                     (<stat> inp
+                            '()
                             (lambda (inp stat)
                               (cont inp
-                                    (list 'SEQ (list 'WHILE expr) stat))))))))
+                                    (list 'WHILE expr stat))))))))
 
 
 ;; "(" <expr> ")
@@ -347,20 +376,20 @@
                         (expect 'RPAR ;; doit etre suivi de ")"
                                 inp
                                 (lambda (inp)
+                                  (pp (list 'PPEXPR inp expr))
                                   (cont inp
                                         expr)))))))))
-(trace <paren_expr>)
 
 (define <expr_stat>
-  (lambda (inp cont)
+  (lambda (inp listeStat cont)
     (<expr> inp ;; analyser un <expr>
             (lambda (inp expr)
               (expect 'SEMI ;; doit etre suivi de ";"
                       inp
                       (lambda (inp)
                         (cont inp
-                              (list 'SEQ (list 'EXPR expr)))))))))
-(trace <expr_stat>)
+                              (append listeStat (list 'EXPR expr)))))))))
+;;(trace <expr_stat>)
 
 ;;<test> | <id> "=" <expr>
 (define <expr>
@@ -378,7 +407,7 @@
                                                       sym1
                                                       expr))))
                                 (<test> inp cont))))))))
-(trace <expr>)
+;;(trace <expr>)
 
 ;;<sum> | <sum> "<" <sum> | <sum> "<=" <sum> | <sum> "<=" <sum> | <sum> "<=" <sum>
 ;;| <sum> ">" <sum> | <sum> ">=" <sum> | <sum> "==" <sum> | <sum> "!=" <sum>
@@ -399,7 +428,7 @@
                                                   sym1
                                                   expr))))
                           (<sum> inp '() cont))))))))
-(trace <test>)
+;;(trace <test>)
 ;;<mult> | <sum> "+" <mult> | <sum> "-" <mult>
 (define <sum>
   (lambda (inp listeSum cont)
@@ -445,9 +474,9 @@
                                            sym1
                                            (append listeMult
                                                    (list sym1)))))))))))
-(trace <mult>)
+;;(trace <mult>)
 
-;;<id> | <int>| <parent_expr>
+;;<id> | <int>| <paren_expr>
 (define <term>
   (lambda (inp cont)
     (next-sym inp ;; verifier le premier symbole du <term>
@@ -458,7 +487,7 @@
                        (cont inp2 (list 'INT sym)))
                       (else
                        (<paren_expr> inp cont)))))))
-(trace <term>)
+;(trace <term>)
 ;; La fonction execute prend en parametre l'ASA du programme a
 ;; interpreter et retourne une chaine de caracteres qui contient
 ;; l'accumulation de tout ce qui est affiche par les enonces "print"
@@ -466,6 +495,7 @@
 
 (define execute
   (lambda (ast)
+    (pp ast)
     (exec-stat '() ;; etat des variables globales
                ""  ;; sortie jusqu'a date
                ast ;; ASA du programme
@@ -484,12 +514,11 @@
 
 (define exec-stat
   (lambda (env output ast cont)
-    (display "ast courrant: ")(display ast)(newline)
-    (display "stat courrant: ")(display (caadr ast))(newline)
-    ;;(pp (list 'what_to_pass_next (cadr (cadr (cadr ast)))))
-    (case (if (equal? (caadr ast) 'EMPTY)
+    ;;(pp (list 'EXEC-STAT-BITCH ast (cadr ast) (car (cadr ast)) (cadr (cadr ast))))
+    (case (if (and (pair? cdr)
+                   (equal? (caadr ast) 'EMPTY))
               'EMPTY
-              (caadr (cadr ast)))
+              (car (cadr ast)))
       ((PRINT)
        (exec-expr env ;; evaluer l'expression du print
                   output
@@ -512,12 +541,12 @@
       ((EXPR)
        (exec-expr env ;; evaluer l'expression
                   output
-                  (cadr (cadr (cadr ast)))
+                  (cadr (cadr ast))
                   (lambda (env output val)
-                    (pp (list 'RETURNED-TO-NEXT-EXECSTAT (cdr ast)))
+;;                    (pp (list 'RETURNED-TO-NEXT-EXECSTAT (cdr ast)))
                     (exec-stat env ;; ajouter le resultat a la sortie
                                output
-                               (cdr ast)
+                               (cddr ast)
                                cont))))
       ((IF)
        ;;(pp (list 'IFEXPR (cadr (cadr ast))))
@@ -525,14 +554,14 @@
                   output
                   (cadr (cadr (cadr ast)))
                   (lambda (env output val)
-                    (pp (list "if: " env output val))
+;;                    (pp (list "if: " env output val))
                     (if val
                         (exec-stat env
                                    output
                                    (caddr (cadr ast))
                                    (lambda (env output)
-                                     (pp(list "sequence if: "(caddr (cadr ast))))
-                                     (pp(list "suite if: "(cdr ast)))
+;;                                     (pp(list "sequence if: "(caddr (cadr ast))))
+;;                                     (pp(list "suite if: "(cdr ast)))
                                      (exec-stat env
                                                 output
                                                 (cdr ast)
@@ -547,14 +576,14 @@
                   output
                   (cadr (cadr (cadr ast)))
                   (lambda (env output val)
-                    (pp (list "if-else: " env output val))
+;;                    (pp (list "if-else: " env output val))
                     (if val
                         (exec-stat env;;TRUE
                                    output
                                    (caddr (cadr ast))
                                    (lambda (env output)
-                                     (pp(list "sequence if-else true: "(caddr (cadr ast))))
-                                     (pp(list "suite if-else: "(cdr ast)))
+;;                                     (pp(list "sequence if-else true: "(caddr (cadr ast))))
+;;                                     (pp(list "suite if-else: "(cdr ast)))
                                      (exec-stat env
                                                 output
                                                 (cdr ast)
@@ -563,7 +592,7 @@
                                    output
                                    (cadddr (cadr ast))
                                    (lambda (env output)
-                                     (pp(list "sequence if-else false: "(caddr (cadr ast))))
+;;                                     (pp(list "sequence if-else false: "(caddr (cadr ast))))
                                      (exec-stat env
                                                 output
                                                 (cdr ast)
@@ -653,8 +682,10 @@
                 output
                 (op num1 num2)))))
 
+    (pp (list 'EXEC-EXPR-BIIITCH ast (car ast)))
     (case (car ast)
       ((INT)
+       (pp (list 'INT-VAL (cadr ast)))
        (cont env
              output
              (cadr ast))) ;; retourner la valeur de la constante
@@ -692,9 +723,7 @@
                   output
                   (caddr ast)
                   (lambda(env output val)
-                    (cont (append (list (list (cadr ast)
-                                              val))
-                                  env)
+                    (cont (append (list (list (cadr ast) val)) env)
                           output
                           (cadr ast)))))
     (else
@@ -702,7 +731,16 @@
 
 ;; Il faut enlever la trace avant la remise...
 
-(trace main parse-and-execute execute <program> <expr>)
+(trace main parse-and-execute execute
+       <program>
+       <expr>
+       <paren_expr>
+       <print_stat>
+       <expr_stat>
+       <if_stat>
+       <while_stat>
+       <stat>
+       <bracket_stat>)
 
 ;;;----------------------------------------------------------------------------
 
