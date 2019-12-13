@@ -235,30 +235,31 @@
 
 (define <program>
   (lambda (inp cont)
-    (<stat> inp cont))) ;; analyser un <stat>
+    (<stat> inp '() cont))) ;; analyser un <stat>
 
 (define <stat>
-  (lambda (inp cont)
+  (lambda (inp listeStat cont)
     (next-sym inp
               (lambda (inp2 sym)
                 (case sym ;; determiner quel genre de <stat>
                   ((PRINT-SYM)
-                   (<print_stat> inp2 cont))
+                   (<print_stat> inp2 (append listeStat (list 'SEQ)) cont))
                   ((IF-SYM)
-                   (<if_stat> inp2 cont))
+                   (<if_stat> inp2 (append listeStat (list 'SEQ)) cont))
                   ((WHILE-SYM)
-                   (<while_stat> inp2 cont))
+                   (<while_stat> inp2 (append listeStat 'SEQ) cont))
                   ((LBRK)
-                   (<bracket_stat> inp2 '(SEQ) cont))
+                   (<bracket_stat> inp2 (append listeStat '()) cont))
                   ((DO-SYM)
-                   (<do_stat> inp2 cont))
+                   (<do_stat> inp2 (append listeStat 'SEQ) cont))
                   (else
-                   (<expr_stat> inp cont)))))))
+                   (<expr_stat> inp (append listeStat 'SEQ) cont)))))))
 (trace <stat>)
 
 (define <bracket_stat>
   (lambda (inp listeStat cont)
     (<stat> inp ;;fait le statement a l'interieur
+            listeStat
             (lambda (inp2 sym);;regarde le symbole apres
               (next-sym inp2
                         (lambda(inp3 sym2)
@@ -267,15 +268,17 @@
                            ((equal? sym2 'EOI)
                             (syntax-err))
                            ((equal? sym2 'RBRK);;si on trouve un '}'
+                            (display "listeStat: ")(display listeStat)(newline)
+                            (display "sym: ")(display sym)(newline)
                             ;; on ajoute un bloc statement ((<stat>)())
-                            (cont inp3 (append listeStat (list sym (list 'EMPTY)))))
+                            (cont inp3 (append sym (list 'EMPTY))))
                            (else
                             (<bracket_stat> inp2
-                                            (append listeStat (list sym))
+                                            (append listeStat sym)
                                             cont)))))))))
 
 (define <do_stat>
-  (lambda (inp cont)
+  (lambda (inp listeStat cont)
     (<stat> inp
             (lambda (inp stat)
               (next-sym inp
@@ -288,39 +291,41 @@
                                                     inp3
                                                     (lambda (inp3)
                                                       (cont inp2
-                                                            (list 'SEQ (list 'DO-WHILE stat) expr)))))))
+                                                            (list ('DO-WHILE stat) expr)))))))
                           (else
                            (syntax-err)))))))))
 
 (trace <bracket_stat>)
 ;; print( <expr> )
 (define <print_stat>
-  (lambda (inp cont)
+  (lambda (inp listeStat cont)
+    (display "listeStat print: ")(display listeStat)(newline)
     (<paren_expr> inp ;; analyser un <paren_expr>
                   (lambda (inp expr)
                     (expect 'SEMI ;; verifier qu'il y a ";" apres
                             inp
                             (lambda (inp)
                               (cont inp
-                                    (list 'SEQ (list 'PRINT expr)))))))))
+                                    (append listeStat (list (list 'PRINT expr))))))))))
 (trace <print_stat>)
 (define <if_stat>
-  (lambda (inp cont)
+  (lambda (inp listeStat cont)
     (<paren_expr> inp ;; analyser un <paren_expr>
+                  listeStat
                   (lambda (inp expr)
                     (<stat> inp
+                            listeStat
                             (lambda (inp stat)
                               (next-sym inp
                                         (lambda(inp2 stat2)
-                                          (display "inp2 if: ")(display inp2)(newline)
-                                          (display "stat2 if: ")(display stat2)(newline)
                                           (cond
                                            ((equal? stat2 'ELSE-SYM)
                                             (<stat> inp2
+                                                    listeStat
                                                     (lambda (inp3 stat3)
                                                       (display "stat2")(display stat2)(newline)
                                                       (cont inp3
-                                                            (list 'SEQ (list 'IF-ELSE expr) stat stat3)))))
+                                                            (list (list 'SEQ) (list 'IF-ELSE expr) stat stat3)))))
                                            (else
                                             (cont inp
                                                   (list 'SEQ (list 'IF expr) stat))))))))))))
