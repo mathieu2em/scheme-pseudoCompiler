@@ -78,7 +78,6 @@
                                  (cont ($ inp) 'ASSIGN))) ;; ==
 
                             ((char=? c #\>)
-;;                             (pp (list 'BTEQ c c2 ($ ($ inp))))
                              (if (char=? c2 #\=)
                                  (cont ($ ($ inp)) 'BTEQ) ;; >=
                                  (cont ($ inp) 'BT)))     ;; >
@@ -221,7 +220,6 @@
                  (expect 'EOI ;; verifier qu'il n'y a rien apres
                          inp
                          (lambda (inp)
-                           (pp (list 'PPPARSE inp program))
                            (cont program)))))))
 
 ;; Les fonctions suivantes, <program>, <stat>, ... recoivent deux
@@ -240,10 +238,8 @@
             cont))) ;; analyser un <stat>
 
 (define (rearrangeASA liste)
-  (pp liste)
   (if (pair? liste)
       (let ((last-elem (car (reverse liste))))
-        (pp last-elem)
         (rearrangeASAhelper (cdr (reverse liste)) (list 'SEQ last-elem (list 'EMPTY))))
       '()))
 
@@ -266,7 +262,7 @@
                   ((LBRK)
                    (<bracket_stat> inp2 '() cont))
                   ((DO-SYM)
-                   (<do_stat> inp2 '() cont))
+                   (<do_stat> inp2 cont))
                   (else
                    (<expr_stat> inp '() cont)))))))
 
@@ -275,7 +271,6 @@
     (<stat> inp ;;fait le statement a l'interieur
             '()
             (lambda (inp2 sym);;regarde le symbole apres
-              (pp sym)
               (next-sym inp2
                         (lambda(inp3 sym2)
                           (cond
@@ -312,12 +307,10 @@
                                                     inp3
                                                     (lambda (inp3)
                                                       (cont inp2
-                                                            ))))))
-                                                            ;;(list 'SEQ (list 'DO-WHILE stat) expr)))))))
+                                                            (list 'DO-WHILE stat expr)))))))
                           (else
                            (syntax-err)))))))))
 
-;;(trace <bracket_stat>)
 ;; print( <expr> )
 (define <print_stat>
   (lambda (inp listeStat cont)
@@ -326,10 +319,8 @@
                     (expect 'SEMI ;; verifier qu'il y a ";" apres
                             inp
                             (lambda (inp)
-                              ;;(pp (list 'PPPRINTSTAT listeStat 'PRINT expr))
                               (cont inp
                                     (append listeStat (list 'PRINT expr)))))))))
-;;(trace <print_stat>)
 (define <if_stat>
   (lambda (inp cont)
     (<paren_expr> inp ;; analyser un <paren_expr>
@@ -352,8 +343,6 @@
                                            (else
                                             (cont inp
                                                   (list 'IF expr stat))))))))))))
-;;(trace <if_stat>)
-
 (define <while_stat>
   (lambda (inp cont)
     (<paren_expr> inp
@@ -376,7 +365,6 @@
                         (expect 'RPAR ;; doit etre suivi de ")"
                                 inp
                                 (lambda (inp)
-                                  (pp (list 'PPEXPR inp expr))
                                   (cont inp
                                         expr)))))))))
 
@@ -389,7 +377,6 @@
                       (lambda (inp)
                         (cont inp
                               (append listeStat (list 'EXPR expr)))))))))
-;;(trace <expr_stat>)
 
 ;;<test> | <id> "=" <expr>
 (define <expr>
@@ -407,7 +394,6 @@
                                                       sym1
                                                       expr))))
                                 (<test> inp cont))))))))
-;;(trace <expr>)
 
 ;;<sum> | <sum> "<" <sum> | <sum> "<=" <sum> | <sum> "<=" <sum> | <sum> "<=" <sum>
 ;;| <sum> ">" <sum> | <sum> ">=" <sum> | <sum> "==" <sum> | <sum> "!=" <sum>
@@ -428,7 +414,6 @@
                                                   sym1
                                                   expr))))
                           (<sum> inp '() cont))))))))
-;;(trace <test>)
 ;;<mult> | <sum> "+" <mult> | <sum> "-" <mult>
 (define <sum>
   (lambda (inp listeSum cont)
@@ -474,7 +459,6 @@
                                            sym1
                                            (append listeMult
                                                    (list sym1)))))))))))
-;;(trace <mult>)
 
 ;;<id> | <int>| <paren_expr>
 (define <term>
@@ -487,7 +471,7 @@
                        (cont inp2 (list 'INT sym)))
                       (else
                        (<paren_expr> inp cont)))))))
-;(trace <term>)
+
 ;; La fonction execute prend en parametre l'ASA du programme a
 ;; interpreter et retourne une chaine de caracteres qui contient
 ;; l'accumulation de tout ce qui est affiche par les enonces "print"
@@ -495,7 +479,6 @@
 
 (define execute
   (lambda (ast)
-    (pp ast)
     (exec-stat '() ;; etat des variables globales
                ""  ;; sortie jusqu'a date
                ast ;; ASA du programme
@@ -514,18 +497,23 @@
 
 (define exec-stat
   (lambda (env output ast cont)
-    ;;(pp (list 'EXEC-STAT-BITCH ast (cadr ast) (car (cadr ast)) (cadr (cadr ast))))
-    (case (if (and (pair? cdr)
-                   (equal? (caadr ast) 'EMPTY))
-              'EMPTY
-              (car (cadr ast)))
+    (case (cond ((equal? (car ast) 'EMPTY)
+                 'EMPTY)
+                ((not (equal? (car ast) 'SEQ))
+                 (pp (list 'GOOD! ast (cdr ast)))
+                 (car ast))
+                (else
+                 (car (cadr ast))))
       ((PRINT)
        (exec-expr env ;; evaluer l'expression du print
                   output
-                  (cadr (cadr (cadr ast)))
+                  (if (equal? (car ast) 'SEQ)
+                      (cadr (cadr ast))
+                      (cadr ast))
                   (lambda (env output val)
                     (exec-stat env ;; ajouter le resultat a la sortie
                                (cond ((number? val)
+                                      (pp (list 'NUMBER val))
                                       (string-append output
                                                      (number->string val)
                                                      "\n"))
@@ -535,7 +523,9 @@
                                                          "true"
                                                          "false")
                                                      "\n")))
-                               (cdr ast)
+                               (if (equal? (car ast) 'SEQ)
+                                   (caddr ast)
+                                   '(EMPTY))
                                cont))))
 
       ((EXPR)
@@ -543,64 +533,54 @@
                   output
                   (cadr (cadr ast))
                   (lambda (env output val)
-;;                    (pp (list 'RETURNED-TO-NEXT-EXECSTAT (cdr ast)))
                     (exec-stat env ;; ajouter le resultat a la sortie
                                output
-                               (cddr ast)
+                               (caddr ast)
                                cont))))
       ((IF)
-       ;;(pp (list 'IFEXPR (cadr (cadr ast))))
        (exec-expr env
                   output
-                  (cadr (cadr (cadr ast)))
+                  (cadr (cadr ast))
                   (lambda (env output val)
-;;                    (pp (list "if: " env output val))
                     (if val
                         (exec-stat env
                                    output
                                    (caddr (cadr ast))
                                    (lambda (env output)
-;;                                     (pp(list "sequence if: "(caddr (cadr ast))))
-;;                                     (pp(list "suite if: "(cdr ast)))
                                      (exec-stat env
                                                 output
                                                 (cdr ast)
                                                 cont)))
                         (exec-stat env
                                    output
-                                   (cdr ast)
+                                   (caddr ast)
                                    cont)))))
       ((IF-ELSE)
-       ;;(pp (list 'IFEXPR (cadr (cadr ast))))
        (exec-expr env
                   output
-                  (cadr (cadr (cadr ast)))
+                  (cadr (cadr ast))
                   (lambda (env output val)
-;;                    (pp (list "if-else: " env output val))
                     (if val
                         (exec-stat env;;TRUE
                                    output
                                    (caddr (cadr ast))
                                    (lambda (env output)
-;;                                     (pp(list "sequence if-else true: "(caddr (cadr ast))))
-;;                                     (pp(list "suite if-else: "(cdr ast)))
                                      (exec-stat env
                                                 output
-                                                (cdr ast)
+                                                (caddr ast)
                                                 cont)))
                         (exec-stat env;;TRUE
                                    output
                                    (cadddr (cadr ast))
                                    (lambda (env output)
-;;                                     (pp(list "sequence if-else false: "(caddr (cadr ast))))
                                      (exec-stat env
                                                 output
-                                                (cdr ast)
+                                                (caddr ast)
                                                 cont)))))))
       ((WHILE)
        (exec-expr env
                    output
-                   (cadr (cadr (cadr ast)))
+                   (cadr (cadr ast))
                    (lambda (env output val)
                      (if val
                          (exec-stat env
@@ -613,13 +593,13 @@
                                                  cont)))
                          (exec-stat env
                                     output
-                                    (cdr ast)
+                                    (caddr ast)
                                     cont)))))
 
       ((DO-WHILE)
        (exec-stat env;;stat
                   output
-                  (cadr (cadr (cadr ast)))
+                  (cadr (cadr ast))
                   (lambda (env output)
                     (exec-expr env;;eval
                                output
@@ -628,7 +608,7 @@
                                  (if val
                                      (exec-stat env
                                                 output
-                                                (cadr (cadr (cadr ast)))
+                                                (cadr (cadr ast))
                                                 (lambda (env output)
                                                   (exec-stat env
                                                              output
@@ -636,13 +616,13 @@
                                                              cont)))
                                      (exec-stat env
                                                 output
-                                                (cdr ast)
+                                                (caddr ast)
                                                 cont)))))))
 
-      ((EMPTY);;END of Statement TODO peut probablement juste faire un () vide, mais faudra le traiter plus haut
+      ((EMPTY);;END of Statement
        (cont env output))
       (else
-       "internal error (unknown statement AST)\n"))))
+       "internal error (unknown statement AST in STAT)\n"))))
 
 ;; La fonction exec-expr fait l'interpretation d'une expression du
 ;; programme.  Elle prend quatre parametres : une liste d'association
@@ -682,10 +662,8 @@
                 output
                 (op num1 num2)))))
 
-    (pp (list 'EXEC-EXPR-BIIITCH ast (car ast)))
     (case (car ast)
       ((INT)
-       (pp (list 'INT-VAL (cadr ast)))
        (cont env
              output
              (cadr ast))) ;; retourner la valeur de la constante
@@ -722,12 +700,13 @@
        (exec-expr env
                   output
                   (caddr ast)
-                  (lambda(env output val)
+                  (lambda (env output val)
+                    ;;(pp (list 'VALOFVAR ast (cadr ast) val))
                     (cont (append (list (list (cadr ast) val)) env)
                           output
-                          (cadr ast)))))
+                          val))))
     (else
-     "internal error (unknown expression AST)\n"))))
+     "internal error (unknown expression AST in EXPR)\n"))))
 
 ;; Il faut enlever la trace avant la remise...
 
