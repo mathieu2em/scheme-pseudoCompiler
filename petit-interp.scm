@@ -117,6 +117,13 @@
   (lambda ()
     "syntax error\n"))
 
+;; La fonction syntax-err retourne le message d'erreur indiquant une
+;; erreur de syntaxe.
+
+(define div-zero-err
+  (lambda ()
+    "Error: division by 0\n"))
+
 ;; La fonction blanc? teste si son unique parametre est un caractere
 ;; blanc.
 
@@ -658,10 +665,13 @@
 
         (let ((num1 (func (cadr ast)))
               (num2 (func (caddr ast))))
-          (cont env
-                output
-                (op num1 num2)))))
-
+          (if (or (and (equal? op /)(equal? num2 0));;Division by 0
+                  (and (equal? op modulo)(equal? num2 0)));;Modulo by 0
+              (div-zero-err)
+              (cont env
+                    output
+                    (op num1 num2))))))
+    
     (case (car ast)
       ((INT)
        (cont env
@@ -707,19 +717,6 @@
                           val))))
     (else
      "internal error (unknown expression AST in EXPR)\n"))))
-
-;; Il faut enlever la trace avant la remise...
-
-(trace main parse-and-execute execute
-       <program>
-       <expr>
-       <paren_expr>
-       <print_stat>
-       <expr_stat>
-       <if_stat>
-       <while_stat>
-       <stat>
-       <bracket_stat>)
 
 ;;;----------------------------------------------------------------------------
 
