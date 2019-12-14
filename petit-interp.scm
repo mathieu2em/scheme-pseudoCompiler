@@ -570,7 +570,7 @@
                                      (exec-stat env3
                                                 output
                                                 (if (equal? (car ast) 'SEQ)
-                                                    (cdr ast)
+                                                    (caddr ast)
                                                     '(EMPTY))
                                                 ;;(cdr ast)
                                                 cont)))
@@ -706,14 +706,18 @@
                                  val)))))
         (let ((num1 (func (cadr ast)))
               (num2 (func (caddr ast))))
-          (if (or (and (equal? op /)(equal? num2 0));;Division by 0
-                  (equal? num2 "Error: division by 0\n")
-                  (equal? num1 "Error: division by 0\n")
-                  (and (equal? op modulo)(equal? num2 0)));;Modulo by 0
-              (div-zero-err)
-              (cont env
-                    output
-                    (op num1 num2))))))
+          (cond ((or (and (equal? op /)(equal? num2 0));;Division by 0
+                     (equal? num2 "Error: division by 0\n")
+                     (equal? num1 "Error: division by 0\n")
+                     (and (equal? op modulo)(equal? num2 0)));;Modulo by 
+                 (div-zero-err))
+                ((or (equal? num2 "syntax error\n")
+                     (equal? num1 "syntax error\n"))
+                 (syntax-err))
+                (else
+                 (cont env
+                       output
+                       (op num1 num2)))))))
 
     (case (car ast)
       ((INT)
@@ -724,8 +728,10 @@
        (cont env
              output
              (let ((val (isThere? (cadr ast) env)))
-               (if (or (symbol? val) (not val))
-                   (syntax-err)
+               (if (symbol? val)
+                   (cont '()
+                         (syntax-err)
+                         (syntax-err))
                    (cadr val)))))
       ((ADD)
        (exec-op +))
@@ -754,24 +760,13 @@
                   output
                   (caddr ast)
                   (lambda (env output val)
-                    (cont (if (append (list (list (cadr ast) val)) env)
-                              output
-                              val)))))
+                    (cont (append (list (list (cadr ast) val)) env)
+                          output
+                          val))))
     (else
      "internal error (unknown expression AST in EXPR)\n"))))
 
 ;;;----------------------------------------------------------------------------
-
-#;(trace main parse-and-execute execute
-       <program>
-       <expr>
-       <paren_expr>
-       <print_stat>
-       <expr_stat>
-       <if_stat>
-       <while_stat>
-       <stat>
-       <bracket_stat>)
 
 ;;; *** NE MODIFIEZ PAS CETTE SECTION ***
 
