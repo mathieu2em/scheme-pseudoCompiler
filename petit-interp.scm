@@ -58,7 +58,6 @@
            (next-sym ($ inp) cont)) ;; sauter les blancs
           (else
            (let ((c (@ inp)))
-;;             (pp c)
              (cond ((chiffre?   c) (symbol-int inp  cont))
                    ((lettre?    c) (symbol-id  inp  cont))
                    ((char=? c #\{) (cont ($ inp)   'LBRK)) ;; { Left Bracket
@@ -213,11 +212,9 @@
   (lambda (expected-sym inp cont)
     (next-sym inp
               (lambda (inp sym)
-;;                (pp (list 'EXPECT expected-sym 'FIND sym))
                 (if (equal? sym expected-sym)
                     (cont inp)
                     (begin
-;;                      (pp (list 'FUUUUUUCK sym expected-sym))
                       (syntax-err)))))))
 
 ;; La fonction parse recoit deux parametres, une liste de caracteres
@@ -315,7 +312,6 @@
                         (lambda(inp2 stat2)
                           (cond
                            ((equal? stat2 'WHILE-SYM);;doit etre suivi de "while"
-;;                            (pp 'EQWS)
                             (<paren_expr> inp2
                                           (lambda (inp3 expr)
                                             (expect 'SEMI;;doit etre suivi de ";"
@@ -495,7 +491,6 @@
 
 (define execute
   (lambda (ast)
-;;    (pp ast)
     (exec-stat '() ;; etat des variables globales
                ""  ;; sortie jusqu'a date
                ast ;; ASA du programme
@@ -514,11 +509,9 @@
 
 (define exec-stat
   (lambda (env output ast cont)
-;;    (pp (list 'EXECTSTATHEAD ast))
     (case (cond ((equal? (car ast) 'EMPTY)
                  'EMPTY)
                 ((not (equal? (car ast) 'SEQ))
-;;                 (pp (list 'GOOD! ast (cdr ast)))
                  (car ast))
                 (else
                  (car (cadr ast))))
@@ -531,7 +524,6 @@
                   (lambda (env output val)
                     (exec-stat env ;; ajouter le resultat a la sortie
                                (cond ((number? val)
-;;                                      (pp (list 'NUMBER val))
                                       (string-append output
                                                      (number->string val)
                                                      "\n"))
@@ -547,7 +539,6 @@
                                cont))))
 
       ((EXPR)
-;;       (pp (list 'EXPRALONE ast (cadr ast)))
        (exec-expr env ;; evaluer l'expression
                   output
                   (if (equal? (car ast) 'SEQ)
@@ -555,7 +546,6 @@
                       (cadr ast))
                   ;;(cadr (cadr ast))
                   (lambda (env output val)
-;;                    (pp (list 'EXPR!!!! ast))
                     (exec-stat env ;; ajouter le resultat a la sortie
                                output
                                (if (equal? (car ast) 'SEQ)
@@ -563,7 +553,6 @@
                                    '(EMPTY))
                                cont))))
       ((IF)
-;;       (pp (list 'ASTINIF (cadr ast) ast))
        (exec-expr env
                   output
                   (if (equal? (car ast) 'SEQ)
@@ -571,7 +560,6 @@
                       (cadr ast))
                   ;;(cadr (cadr ast))
                   (lambda (env output val)
-;;                    (pp (list 'execstatinif (caddr (cadr ast)) (caddr ast) val output env))
                     (if val
                         (exec-stat env
                                    output
@@ -719,10 +707,13 @@
                                elem;;(car (cdr ast))
                                (lambda(env output val)
                                  val)))))
+;;        (pp ast)
 
         (let ((num1 (func (cadr ast)))
               (num2 (func (caddr ast))))
           (if (or (and (equal? op /)(equal? num2 0));;Division by 0
+                  (equal? num2 "Error: division by 0\n")
+                  (equal? num1 "Error: division by 0\n")
                   (and (equal? op modulo)(equal? num2 0)));;Modulo by 0
               (div-zero-err)
               (cont env
@@ -742,7 +733,7 @@
                    (syntax-err)
                    val))))
       ((ADD)
-       (exec-op + ))
+       (exec-op +))
       ((SUB)
        (exec-op -))
       ((MUL)
@@ -764,12 +755,10 @@
       ((NEQ)
        (exec-op !=))
       ((ASSIGN)
-;;       (pp (list 'ASSIGNPP ast (caddr ast)))
        (exec-expr env
                   output
                   (caddr ast)
                   (lambda (env output val)
-;;                    (pp (list 'VALOFVAR ast (cadr ast) val))
                     (cont (append (list (list (cadr ast) val)) env)
                           output
                           val))))
