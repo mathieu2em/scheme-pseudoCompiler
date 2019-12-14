@@ -58,6 +58,7 @@
            (next-sym ($ inp) cont)) ;; sauter les blancs
           (else
            (let ((c (@ inp)))
+;;             (pp c)
              (cond ((chiffre?   c) (symbol-int inp  cont))
                    ((lettre?    c) (symbol-id  inp  cont))
                    ((char=? c #\{) (cont ($ inp)   'LBRK)) ;; { Left Bracket
@@ -129,7 +130,10 @@
 
 (define blanc?
   (lambda (c)
-    (or (char=? c #\space) (char=? c #\newline) (char=? c #\tab) (char=? c #\return))))
+    (or (char=? c #\space)
+        (char=? c #\newline)
+        (char=? c #\tab)
+        (char=? c #\return))))
 
 ;; La fonction chiffre? teste si son unique parametre est un caractere
 ;; numerique.
@@ -209,9 +213,12 @@
   (lambda (expected-sym inp cont)
     (next-sym inp
               (lambda (inp sym)
+;;                (pp (list 'EXPECT expected-sym 'FIND sym))
                 (if (equal? sym expected-sym)
                     (cont inp)
-                    (syntax-err))))))
+                    (begin
+;;                      (pp (list 'FUUUUUUCK sym expected-sym))
+                      (syntax-err)))))))
 
 ;; La fonction parse recoit deux parametres, une liste de caracteres
 ;; et une continuation.  La liste de caracteres sera analysee pour
@@ -308,12 +315,14 @@
                         (lambda(inp2 stat2)
                           (cond
                            ((equal? stat2 'WHILE-SYM);;doit etre suivi de "while"
+;;                            (pp 'EQWS)
                             (<paren_expr> inp2
                                           (lambda (inp3 expr)
                                             (expect 'SEMI;;doit etre suivi de ";"
                                                     inp3
                                                     (lambda (inp3)
-                                                      (cont inp2
+;;                                                      (pp (list 'SEMIFOUND))
+                                                      (cont inp3
                                                             (list 'DO-WHILE stat expr)))))))
                           (else
                            (syntax-err)))))))))
@@ -486,7 +495,7 @@
 
 (define execute
   (lambda (ast)
-    (pp ast)
+;;    (pp ast)
     (exec-stat '() ;; etat des variables globales
                ""  ;; sortie jusqu'a date
                ast ;; ASA du programme
@@ -505,11 +514,11 @@
 
 (define exec-stat
   (lambda (env output ast cont)
-    (pp (list 'EXECTSTATHEAD ast))
+;;    (pp (list 'EXECTSTATHEAD ast))
     (case (cond ((equal? (car ast) 'EMPTY)
                  'EMPTY)
                 ((not (equal? (car ast) 'SEQ))
-                 (pp (list 'GOOD! ast (cdr ast)))
+;;                 (pp (list 'GOOD! ast (cdr ast)))
                  (car ast))
                 (else
                  (car (cadr ast))))
@@ -522,7 +531,7 @@
                   (lambda (env output val)
                     (exec-stat env ;; ajouter le resultat a la sortie
                                (cond ((number? val)
-                                      (pp (list 'NUMBER val))
+;;                                      (pp (list 'NUMBER val))
                                       (string-append output
                                                      (number->string val)
                                                      "\n"))
@@ -538,7 +547,7 @@
                                cont))))
 
       ((EXPR)
-       (pp (list 'EXPRALONE ast (cadr ast)))
+;;       (pp (list 'EXPRALONE ast (cadr ast)))
        (exec-expr env ;; evaluer l'expression
                   output
                   (if (equal? (car ast) 'SEQ)
@@ -546,7 +555,7 @@
                       (cadr ast))
                   ;;(cadr (cadr ast))
                   (lambda (env output val)
-                    (pp (list 'EXPR!!!! ast))
+;;                    (pp (list 'EXPR!!!! ast))
                     (exec-stat env ;; ajouter le resultat a la sortie
                                output
                                (if (equal? (car ast) 'SEQ)
@@ -554,7 +563,7 @@
                                    '(EMPTY))
                                cont))))
       ((IF)
-       (pp (list 'ASTINIF (cadr ast) ast))
+;;       (pp (list 'ASTINIF (cadr ast) ast))
        (exec-expr env
                   output
                   (if (equal? (car ast) 'SEQ)
@@ -562,7 +571,7 @@
                       (cadr ast))
                   ;;(cadr (cadr ast))
                   (lambda (env output val)
-                    (pp (list 'execstatinif (caddr (cadr ast)) (caddr ast) val output env))
+;;                    (pp (list 'execstatinif (caddr (cadr ast)) (caddr ast) val output env))
                     (if val
                         (exec-stat env
                                    output
@@ -594,19 +603,27 @@
                     (if val
                         (exec-stat env;;TRUE
                                    output
-                                   (caddr (cadr ast))
+                                   (if (equal? (car ast) 'SEQ)
+                                        (caddr (cadr ast))
+                                        (caddr ast))
                                    (lambda (env output)
                                      (exec-stat env
                                                 output
-                                                (caddr ast)
+                                                (if (equal? (car ast) 'SEQ)
+                                                    (caddr ast)
+                                                    '(EMPTY))
                                                 cont)))
                         (exec-stat env;;TRUE
                                    output
-                                   (cadddr (cadr ast))
+                                   (if (equal? (car ast) 'SEQ)
+                                        (cadddr (cadr ast))
+                                        (cadddr ast))
                                    (lambda (env output)
                                      (exec-stat env
                                                 output
-                                                (caddr ast)
+                                                (if (equal? (car ast) 'SEQ)
+                                                    (caddr ast)
+                                                    '(EMPTY))
                                                 cont)))))))
       ((WHILE)
        (exec-expr env
@@ -619,7 +636,9 @@
                      (if val
                          (exec-stat env
                                     output
-                                    (caddr (cadr ast))
+                                    (if (equal? (car ast) 'SEQ)
+                                        (caddr (cadr ast))
+                                        (caddr ast))
                                     (lambda (env output)
                                       (exec-stat env
                                                  output
@@ -627,7 +646,9 @@
                                                  cont)))
                          (exec-stat env
                                     output
-                                    (caddr ast)
+                                    (if (equal? (car ast) 'SEQ)
+                                        (caddr ast)
+                                        '(EMPTY))
                                     cont)))))
 
       ((DO-WHILE)
@@ -640,12 +661,16 @@
                   (lambda (env output)
                     (exec-expr env;;eval
                                output
-                               (caddr (cadr ast))
+                               (if (equal? (car ast) 'SEQ)
+                                   (caddr (cadr ast))
+                                   (caddr ast))
                                (lambda (env output val)
                                  (if val
                                      (exec-stat env
                                                 output
-                                                (cadr (cadr ast))
+                                                (if (equal? (car ast) 'SEQ)
+                                                    (cadr (cadr ast))
+                                                    (cadr ast))
                                                 (lambda (env output)
                                                   (exec-stat env
                                                              output
@@ -653,7 +678,9 @@
                                                              cont)))
                                      (exec-stat env
                                                 output
-                                                (caddr ast)
+                                                (if (equal? (car ast) 'SEQ)
+                                                    (caddr ast)
+                                                    '(EMPTY))
                                                 cont)))))))
 
       ((EMPTY);;END of Statement
@@ -701,7 +728,7 @@
               (cont env
                     output
                     (op num1 num2))))))
-    
+
     (case (car ast)
       ((INT)
        (cont env
@@ -737,12 +764,12 @@
       ((NEQ)
        (exec-op !=))
       ((ASSIGN)
-       (pp (list 'ASSIGNPP ast (caddr ast)))
+;;       (pp (list 'ASSIGNPP ast (caddr ast)))
        (exec-expr env
                   output
                   (caddr ast)
                   (lambda (env output val)
-                    (pp (list 'VALOFVAR ast (cadr ast) val))
+;;                    (pp (list 'VALOFVAR ast (cadr ast) val))
                     (cont (append (list (list (cadr ast) val)) env)
                           output
                           val))))
@@ -750,6 +777,17 @@
      "internal error (unknown expression AST in EXPR)\n"))))
 
 ;;;----------------------------------------------------------------------------
+
+#;(trace main parse-and-execute execute
+       <program>
+       <expr>
+       <paren_expr>
+       <print_stat>
+       <expr_stat>
+       <if_stat>
+       <while_stat>
+       <stat>
+       <bracket_stat>)
 
 ;;; *** NE MODIFIEZ PAS CETTE SECTION ***
 
