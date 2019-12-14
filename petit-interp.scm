@@ -521,8 +521,8 @@
                   (if (equal? (car ast) 'SEQ)
                       (cadr (cadr ast))
                       (cadr ast))
-                  (lambda (env output val)
-                    (exec-stat env ;; ajouter le resultat a la sortie
+                  (lambda (env2 output val)
+                    (exec-stat env2 ;; ajouter le resultat a la sortie
                                (cond ((number? val)
                                       (string-append output
                                                      (number->string val)
@@ -545,8 +545,8 @@
                       (cadr (cadr ast))
                       (cadr ast))
                   ;;(cadr (cadr ast))
-                  (lambda (env output val)
-                    (exec-stat env ;; ajouter le resultat a la sortie
+                  (lambda (env2 output val)
+                    (exec-stat env2 ;; ajouter le resultat a la sortie
                                output
                                (if (equal? (car ast) 'SEQ)
                                    (caddr ast)
@@ -559,22 +559,22 @@
                       (cadr (cadr ast))
                       (cadr ast))
                   ;;(cadr (cadr ast))
-                  (lambda (env output val)
+                  (lambda (env2 output val)
                     (if val
-                        (exec-stat env
+                        (exec-stat env2
                                    output
                                    (if (equal? (car ast) 'SEQ)
                                        (caddr (cadr ast))
                                        (caddr ast))
-                                   (lambda (env output)
-                                     (exec-stat env
+                                   (lambda (env3 output)
+                                     (exec-stat env3
                                                 output
                                                 (if (equal? (car ast) 'SEQ)
                                                     (cdr ast)
                                                     '(EMPTY))
                                                 ;;(cdr ast)
                                                 cont)))
-                        (exec-stat env
+                        (exec-stat env2
                                    output
                                    (if (equal? (car ast) 'SEQ)
                                        (caddr ast)
@@ -587,27 +587,27 @@
                       (cadr (cadr ast))
                       (cadr ast))
                   ;;(cadr (cadr ast))
-                  (lambda (env output val)
+                  (lambda (env2 output val)
                     (if val
-                        (exec-stat env;;TRUE
+                        (exec-stat env2;;TRUE
                                    output
                                    (if (equal? (car ast) 'SEQ)
                                         (caddr (cadr ast))
                                         (caddr ast))
-                                   (lambda (env output)
-                                     (exec-stat env
+                                   (lambda (env3 output)
+                                     (exec-stat env3
                                                 output
                                                 (if (equal? (car ast) 'SEQ)
                                                     (caddr ast)
                                                     '(EMPTY))
                                                 cont)))
-                        (exec-stat env;;TRUE
+                        (exec-stat env2;;TRUE
                                    output
                                    (if (equal? (car ast) 'SEQ)
                                         (cadddr (cadr ast))
                                         (cadddr ast))
-                                   (lambda (env output)
-                                     (exec-stat env
+                                   (lambda (env3 output)
+                                     (exec-stat env3
                                                 output
                                                 (if (equal? (car ast) 'SEQ)
                                                     (caddr ast)
@@ -620,19 +620,19 @@
                       (cadr (cadr ast))
                       (cadr ast))
                    ;;(cadr (cadr ast))
-                   (lambda (env output val)
+                   (lambda (env2 output val)
                      (if val
-                         (exec-stat env
+                         (exec-stat env2
                                     output
                                     (if (equal? (car ast) 'SEQ)
                                         (caddr (cadr ast))
                                         (caddr ast))
-                                    (lambda (env output)
-                                      (exec-stat env
+                                    (lambda (env3 output)
+                                      (exec-stat env3
                                                  output
                                                  ast
                                                  cont)))
-                         (exec-stat env
+                         (exec-stat env2
                                     output
                                     (if (equal? (car ast) 'SEQ)
                                         (caddr ast)
@@ -646,25 +646,25 @@
                       (cadr (cadr ast))
                       (cadr ast))
                   ;;(cadr (cadr ast))
-                  (lambda (env output)
-                    (exec-expr env;;eval
+                  (lambda (env2 output)
+                    (exec-expr env2;;eval
                                output
                                (if (equal? (car ast) 'SEQ)
                                    (caddr (cadr ast))
                                    (caddr ast))
-                               (lambda (env output val)
+                               (lambda (env3 output val)
                                  (if val
-                                     (exec-stat env
+                                     (exec-stat env3
                                                 output
                                                 (if (equal? (car ast) 'SEQ)
                                                     (cadr (cadr ast))
                                                     (cadr ast))
-                                                (lambda (env output)
-                                                  (exec-stat env
+                                                (lambda (env4 output)
+                                                  (exec-stat env4
                                                              output
                                                              ast
                                                              cont)))
-                                     (exec-stat env
+                                     (exec-stat env3
                                                 output
                                                 (if (equal? (car ast) 'SEQ)
                                                     (caddr ast)
@@ -695,10 +695,7 @@
       (cond ((or (not (list? lst))
                  (null? lst))
              'NO)
-            ((string=? (caar lst) var)
-             (cadar lst))
-            (else
-             (isThere? var (cdr lst)))))
+            (else (assoc var lst))))
 
     (define (exec-op op)
       (let ((func (lambda (elem)
@@ -707,8 +704,6 @@
                                elem;;(car (cdr ast))
                                (lambda(env output val)
                                  val)))))
-;;        (pp ast)
-
         (let ((num1 (func (cadr ast)))
               (num2 (func (caddr ast))))
           (if (or (and (equal? op /)(equal? num2 0));;Division by 0
@@ -729,9 +724,9 @@
        (cont env
              output
              (let ((val (isThere? (cadr ast) env)))
-               (if (symbol? val)
+               (if (or (symbol? val) (not val))
                    (syntax-err)
-                   val))))
+                   (cadr val)))))
       ((ADD)
        (exec-op +))
       ((SUB)
@@ -759,9 +754,9 @@
                   output
                   (caddr ast)
                   (lambda (env output val)
-                    (cont (append (list (list (cadr ast) val)) env)
-                          output
-                          val))))
+                    (cont (if (append (list (list (cadr ast) val)) env)
+                              output
+                              val)))))
     (else
      "internal error (unknown expression AST in EXPR)\n"))))
 
