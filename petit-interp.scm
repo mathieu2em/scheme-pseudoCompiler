@@ -479,6 +479,7 @@
 
 (define execute
   (lambda (ast)
+    (pp ast)
     (exec-stat '() ;; etat des variables globales
                ""  ;; sortie jusqu'a date
                ast ;; ASA du programme
@@ -497,6 +498,7 @@
 
 (define exec-stat
   (lambda (env output ast cont)
+    (pp (list 'EXECTSTATHEAD ast))
     (case (cond ((equal? (car ast) 'EMPTY)
                  'EMPTY)
                 ((not (equal? (car ast) 'SEQ))
@@ -529,36 +531,58 @@
                                cont))))
 
       ((EXPR)
+       (pp (list 'EXPRALONE ast (cadr ast)))
        (exec-expr env ;; evaluer l'expression
                   output
-                  (cadr (cadr ast))
+                  (if (equal? (car ast) 'SEQ)
+                      (cadr (cadr ast))
+                      (cadr ast))
+                  ;;(cadr (cadr ast))
                   (lambda (env output val)
+                    (pp (list 'EXPR!!!! ast))
                     (exec-stat env ;; ajouter le resultat a la sortie
                                output
-                               (caddr ast)
+                               (if (equal? (car ast) 'SEQ)
+                                   (caddr ast)
+                                   '(EMPTY))
                                cont))))
       ((IF)
+       (pp (list 'ASTINIF (cadr ast) ast))
        (exec-expr env
                   output
-                  (cadr (cadr ast))
+                  (if (equal? (car ast) 'SEQ)
+                      (cadr (cadr ast))
+                      (cadr ast))
+                  ;;(cadr (cadr ast))
                   (lambda (env output val)
+                    (pp (list 'execstatinif (caddr (cadr ast)) (caddr ast) val output env))
                     (if val
                         (exec-stat env
                                    output
-                                   (caddr (cadr ast))
+                                   (if (equal? (car ast) 'SEQ)
+                                       (caddr (cadr ast))
+                                       (caddr ast))
                                    (lambda (env output)
                                      (exec-stat env
                                                 output
-                                                (cdr ast)
+                                                (if (equal? (car ast) 'SEQ)
+                                                    (cdr ast)
+                                                    '(EMPTY))
+                                                ;;(cdr ast)
                                                 cont)))
                         (exec-stat env
                                    output
-                                   (caddr ast)
+                                   (if (equal? (car ast) 'SEQ)
+                                       (caddr ast)
+                                       '(EMPTY))
                                    cont)))))
       ((IF-ELSE)
        (exec-expr env
                   output
-                  (cadr (cadr ast))
+                  (if (equal? (car ast) 'SEQ)
+                      (cadr (cadr ast))
+                      (cadr ast))
+                  ;;(cadr (cadr ast))
                   (lambda (env output val)
                     (if val
                         (exec-stat env;;TRUE
@@ -579,8 +603,11 @@
                                                 cont)))))))
       ((WHILE)
        (exec-expr env
-                   output
-                   (cadr (cadr ast))
+                  output
+                  (if (equal? (car ast) 'SEQ)
+                      (cadr (cadr ast))
+                      (cadr ast))
+                   ;;(cadr (cadr ast))
                    (lambda (env output val)
                      (if val
                          (exec-stat env
@@ -599,7 +626,10 @@
       ((DO-WHILE)
        (exec-stat env;;stat
                   output
-                  (cadr (cadr ast))
+                  (if (equal? (car ast) 'SEQ)
+                      (cadr (cadr ast))
+                      (cadr ast))
+                  ;;(cadr (cadr ast))
                   (lambda (env output)
                     (exec-expr env;;eval
                                output
@@ -697,11 +727,12 @@
       ((NEQ)
        (exec-op !=))
       ((ASSIGN)
+       (pp (list 'ASSIGNPP ast (caddr ast)))
        (exec-expr env
                   output
                   (caddr ast)
                   (lambda (env output val)
-                    ;;(pp (list 'VALOFVAR ast (cadr ast) val))
+                    (pp (list 'VALOFVAR ast (cadr ast) val))
                     (cont (append (list (list (cadr ast) val)) env)
                           output
                           val))))
